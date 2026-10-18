@@ -1,14 +1,7 @@
-Funnel Display and Funnel Sans:
-Copyright 2024 The Funnel Project Authors (https://github.com/Dicotype/Funnel)
+Onest — Copyright 2021 The Onest Project Authors (https://github.com/googlefonts/onest)
+JetBrains Mono — Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
 
-Fragment Mono:
-Copyright 2022 The Fragment-Mono Project Authors (https://github.com/weiweihuanghuang/fragment-mono)
-
-
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-https://openfontlicense.org
-
+Both are licensed under the SIL Open Font License, Version 1.1, reproduced below.
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007

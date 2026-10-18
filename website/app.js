@@ -1,631 +1,425 @@
-// The strip along the bottom of the page behaves like Super Paste's: what you copy here lands in it, pinboard tabs
-// and the search field filter it, and a card copies itself when clicked. Everything lives in memory: nothing is
-// stored, nothing is sent, and the clipboard is only ever written to (on a click), never read.
+/* Super Paste website. Every demo is drawn from one card component and one small demo history; nothing a visitor
+   types or copies here is stored or sent anywhere. */
 (() => {
   "use strict";
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-  const MIN = 60e3, HOUR = 60 * MIN;
-
-  // Card header colours, one per source app, as the app tints each card with its app's colour.
-  const APP_COLOURS = {
-    "This page": "#1D3C8F",
-    Mail: "#1F6FD1",
-    Notes: "#F5C518",
-    Figma: "#8B46D9",
-    Terminal: "#3A3F45",
-    Photos: "#C93A31",
+  // ---------- Apps and demo history ----------
+  const APPS = {
+    safari: { name: "Safari", hdr: "var(--h-blue)", icon: "ic-safari" },
+    notes: { name: "Notes", hdr: "var(--h-notes)", icon: "ic-notes" },
+    mail: { name: "Mail", hdr: "var(--h-blue)", icon: "ic-mail" },
+    photos: { name: "Photos", hdr: "var(--h-red)", icon: "ic-photos" },
+    finder: { name: "Finder", hdr: "var(--h-blue)", icon: "ic-finder" },
+    terminal: { name: "Terminal", hdr: "var(--h-terminal)", icon: "ic-terminal" },
+    meter: { name: "Digital Color Meter", hdr: "var(--h-blue)", icon: "ic-meter" },
+    pages: { name: "Pages", hdr: "var(--h-orange)", icon: "ic-pages" },
+    xcode: { name: "Xcode", hdr: "var(--h-blue)", icon: "ic-xcode" },
   };
-  const BOARDS = {
-    clipboard: { name: "Clipboard" },
-    travel: { name: "Travel", colour: "#FA9214" },
-    work: { name: "Work", colour: "#62A9F5" },
-    snippets: { name: "Snippets", colour: "#B663E0" },
-  };
-  const TYPE_LABELS = { text: "Text", link: "Link", color: "Colour", image: "Image" };
-  const TYPE_NAMES = { text: ["text"], link: ["link", "url"], color: ["color", "colour"], image: ["image", "picture"] };
-  const CLOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.6V8l2.4 1.5"/></svg>';
-  const MAX_ITEMS = 40;
-
-  let uid = 0;
-  const started = Date.now();
-  const items = [
-    { app: "Mail", type: "link", title: "Casa do Rio, Lisboa: your booking for 14–18 May", content: "https://casadorio.pt/booking/R4417", age: 2 * MIN, boards: ["travel"] },
-    { app: "Figma", type: "color", content: "#F2643A", age: 7 * MIN, boards: ["work"] },
-    { app: "Terminal", type: "text", code: true, content: "git commit --amend --no-edit", age: 18 * MIN, boards: ["snippets"] },
-    { app: "Notes", type: "text", content: "Rua das Flores 28, 2º esq.\n1200-195 Lisboa\nBuzzer says Ferreira", age: 52 * MIN, boards: ["travel", "snippets"] },
-    { app: "Photos", type: "image", content: "Rooftops at dusk", size: "1600 × 1200", age: 3 * HOUR, boards: ["travel"] },
-    { app: "Mail", type: "text", content: "Thanks, that works. I’ll send the deck by Thursday and we can go through it on Friday.", age: 26 * HOUR, boards: ["work"] },
-  ].map((item) => ({ ...item, id: "clip-" + ++uid, t: started - item.age }));
-
-  const strip = $("#strip-panel");
-  const list = $("#strip");
-  const scroller = $("[data-strip-scroll]");
-  const empty = $("[data-strip-empty]");
-  const toastEl = $("[data-toast]");
-  const live = $("[data-live]");
-  const search = $("#search");
-  const tabs = $$("[data-board]");
-  const tokens = $$("[data-token]");
-  const nodes = new Map();
-
-  let board = "clipboard";
-  let query = "";
-  let selected = null;
-  let renderGeneration = 0;
-  let shownIds = "";
-
-  // ---------- Helpers ----------
-
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const fold = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const words = (s) => fold(s).split(/[^a-z0-9#]+/).filter(Boolean);
-  const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
-  const motion = () => !reducedMotion.matches;
-
-  function relativeTime(t) {
-    const seconds = (Date.now() - t) / 1000;
-    if (seconds < 45) return "now";
-    const minutes = Math.max(1, Math.round(seconds / 60));
-    if (minutes < 60) return minutes + " min ago";
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) return hours + " hr ago";
-    const days = Math.round(hours / 24);
-    return days === 1 ? "Yesterday" : days + " days ago";
-  }
-
-  // Ink or white text, whichever contrasts more with the colour.
-  function textOn(hex) {
-    const v = parseInt(hex.slice(1), 16);
-    const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-    const lum = 0.2126 * lin(v >> 16) + 0.7152 * lin((v >> 8) & 255) + 0.0722 * lin(v & 255);
-    const onWhite = 1.05 / (lum + 0.05), onInk = (lum + 0.05) / 0.056;
-    return onInk > onWhite ? "#111215" : "#FFFFFF";
-  }
-
-  function host(url) {
-    try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
-  }
-
-  function preview(item) {
-    const text = item.title || item.content;
-    return text.length > 90 ? text.slice(0, 88) + "…" : text;
-  }
-
-  function sameDay(a, b) {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  }
-
-  function dateNames(item) {
-    const day = new Date(item.t), today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-    const names = [];
-    if (sameDay(day, today)) names.push("today");
-    if (sameDay(day, yesterday)) names.push("yesterday");
-    if (Date.now() - item.t < 7 * 24 * HOUR) names.push("week");
-    return names;
-  }
-
-  // ---------- Search: words match by prefix, filters narrow by app, type, date, device, pinboard or title ----------
-
-  function matches(item, q) {
-    const haystack = [item.title || "", item.content, item.app].join(" ");
-    for (const raw of q.trim().split(/\s+/).filter(Boolean)) {
-      const filter = /^(app|type|date|pinboard|title|device):(.*)$/i.exec(raw);
-      if (filter) {
-        const key = filter[1].toLowerCase(), value = fold(filter[2]);
-        if (!value) continue;
-        const ok = {
-          app: () => fold(item.app).startsWith(value),
-          type: () => TYPE_NAMES[item.type].some((n) => n.startsWith(value)),
-          date: () => dateNames(item).some((n) => n.startsWith(value)),
-          pinboard: () => item.boards.some((b) => fold(BOARDS[b].name).startsWith(value)),
-          title: () => words(item.title || "").some((w) => w.startsWith(value)),
-          device: () => "this mac".startsWith(value) || "mac".startsWith(value),
-        }[key]();
-        if (!ok) return false;
-      } else {
-        const token = fold(raw);
-        const hit = words(haystack).some((w) => w.startsWith(token)) || (/[^a-z0-9]/.test(token) && fold(haystack).includes(token));
-        if (!hit) return false;
-      }
-    }
-    return true;
-  }
-
-  const inScope = (item) => (board === "clipboard" || item.boards.includes(board)) && matches(item, query);
-  const visibleItems = () => items.filter(inScope);
-
-  // ---------- Cards ----------
-
-  function cardBody(item) {
-    switch (item.type) {
-      case "link":
-        return `<p>${esc(item.title)}</p>`;
-      case "color":
-        return `<span class="hex">${esc(item.content)}</span>`;
-      case "image":
-        return '<div class="pic" aria-hidden="true"><i class="sun"></i><i class="hill"></i><i class="roofs"></i></div>' +
-          `<span class="pill">${esc(item.size)}</span>`;
-      default:
-        return `<p>${esc(item.content.length > 400 ? item.content.slice(0, 400) : item.content)}</p>`;
-    }
-  }
-
-  function cardFoot(item) {
-    if (item.type === "text") return `<div class="card-foot">${plural([...item.content].length, "character", "characters")}</div>`;
-    if (item.type === "link") return `<div class="card-foot"><span class="tile" aria-hidden="true">${esc(host(item.content).charAt(0))}</span>${esc(host(item.content))}</div>`;
-    return "";
-  }
-
-  function cardNode(item) {
-    let node = nodes.get(item.id);
-    if (node) return node;
-    node = document.createElement("div");
-    node.id = item.id;
-    node.className = "card t-" + item.type + (item.code ? " is-code" : "");
-    node.setAttribute("role", "option");
-    node.setAttribute("aria-selected", "false");
-    const head = APP_COLOURS[item.app] || "#6B7079";
-    node.style.setProperty("--h", head);
-    node.style.setProperty("--hfg", textOn(head));
-    if (item.type === "color") {
-      node.style.setProperty("--swatch", item.content);
-      node.style.setProperty("--swfg", textOn(item.content));
-    }
-    node.innerHTML =
-      `<div class="card-head"><span class="card-type">${TYPE_LABELS[item.type]}</span>` +
-      `<span class="card-meta">${esc(item.app)}<span class="card-when"> · <time></time></span></span></div>` +
-      `<div class="card-body">${cardBody(item)}</div>${cardFoot(item)}<span class="card-num" aria-hidden="true"></span>`;
-    nodes.set(item.id, node);
-    refreshTime(item, node);
-    return node;
-  }
-
-  function refreshTime(item, node) {
-    const when = relativeTime(item.t);
-    const time = $("time", node);
-    if (time.textContent !== when) time.textContent = when;
-    node.setAttribute("aria-label", `${TYPE_LABELS[item.type]} from ${item.app}, ${when}: ${preview(item)}`);
-  }
-
-  const itemById = (id) => items.find((item) => item.id === id);
-
-  function tick() {
-    for (const node of list.children) {
-      const item = itemById(node.id);
-      if (item) refreshTime(item, node);
-    }
-  }
-
-  function numberCards() {
-    [...list.children].forEach((node, i) => { $(".card-num", node).textContent = i < 9 ? String(i + 1) : ""; });
-  }
-
-  // ---------- Rendering ----------
-
-  function updateScope(count) {
-    const info = BOARDS[board];
-    $("[data-scope-mark]").innerHTML = info.colour ? `<span class="dot" style="--dot:${info.colour}"></span>` : CLOCK;
-    $("[data-scope-name]").textContent = info.name;
-    const q = query.trim();
-    $("[data-scope-count]").textContent = q ? `${plural(count, "match", "matches")} for “${q}”` : plural(count, "item", "items");
-    empty.hidden = count > 0;
-    empty.textContent = q ? "Nothing found. Try another word or filter." : `${info.name} is empty.`;
-  }
-
-  function build(shown) {
-    list.replaceChildren(...shown.map(cardNode));
-    shownIds = shown.map((item) => item.id).join();
-    numberCards();
-    if (!shown.some((item) => item.id === selected)) select(shown[0] ? shown[0].id : null, { scroll: false });
-    else select(selected, { scroll: false });
-    updateScope(shown.length);
-    tick();
-  }
-
-  function render({ fade = true } = {}) {
-    const shown = visibleItems();
-    const ids = shown.map((item) => item.id).join();
-    const generation = ++renderGeneration;
-    list.getAnimations().forEach((a) => a.cancel());
-    if (ids === shownIds) { updateScope(shown.length); return; }
-    if (!fade || !motion() || !list.children.length) { build(shown); return; }
-    const fadeOut = list.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, easing: "ease-in", fill: "forwards" });
-    fadeOut.finished
-      .then(() => {
-        if (generation !== renderGeneration) return;
-        build(shown);
-        scroller.scrollLeft = 0;
-        fadeOut.cancel();
-        list.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
-      })
-      .catch(() => {});
-  }
-
-  function select(id, { scroll = true } = {}) {
-    selected = id;
-    for (const node of list.children) node.setAttribute("aria-selected", String(node.id === id));
-    if (id) list.setAttribute("aria-activedescendant", id);
-    else list.removeAttribute("aria-activedescendant");
-    if (scroll && id) reveal(document.getElementById(id));
-  }
-
-  function reveal(node) {
-    if (!node) return;
-    const r = node.getBoundingClientRect(), s = scroller.getBoundingClientRect(), pad = 24;
-    const behavior = motion() ? "smooth" : "auto";
-    if (r.left < s.left + pad) scroller.scrollBy({ left: r.left - s.left - pad, behavior });
-    else if (r.right > s.right - pad) scroller.scrollBy({ left: r.right - s.right + pad, behavior });
-  }
-
-  // ---------- Copying ----------
-
-  let suppressCopyEvent = false;
-
-  async function writeClipboard(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // Older browsers, or a denied permission: copy through a hidden field instead.
-      const back = document.activeElement;
-      const field = document.createElement("textarea");
-      field.value = text;
-      field.setAttribute("readonly", "");
-      field.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
-      document.body.append(field);
-      field.select();
-      let ok = false;
-      suppressCopyEvent = true;
-      try { ok = document.execCommand("copy"); } catch { ok = false; }
-      suppressCopyEvent = false;
-      field.remove();
-      if (back && back.focus) back.focus({ preventScroll: true });
-      return ok;
-    }
-  }
-
-  let toastTimer = 0;
-  function toast(main, detail) {
-    toastEl.replaceChildren();
-    const strong = document.createElement("strong");
-    strong.textContent = main;
-    toastEl.append(strong);
-    if (detail) {
-      const span = document.createElement("span");
-      span.textContent = detail;
-      toastEl.append(" ", span);
-    }
-    toastEl.classList.add("is-on");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toastEl.classList.remove("is-on");
-      toastTimer = setTimeout(() => toastEl.replaceChildren(), 250);
-    }, detail ? 3400 : 1500);
-  }
-
-  function announce(text) {
-    live.textContent = "";
-    requestAnimationFrame(() => { live.textContent = text; });
-  }
-
-  async function copyCard(id, { pasted = false } = {}) {
-    const item = itemById(id);
-    if (!item) return;
-    if (item.type === "image") {
-      toast("Images copy as images", "In the app, this card puts the picture itself on the clipboard.");
-      return;
-    }
-    const ok = await writeClipboard(item.content);
-    if (!ok) { toast("Couldn’t copy", "Your browser blocked it. Select the text and press ⌘C instead."); return; }
-    if (pasted) {
-      toast("Copied", "In the app, a double-click pastes it straight into the app you were using.");
-      const node = document.getElementById(id);
-      if (node && motion()) node.animate([{ transform: "none" }, { transform: "translateY(-8px)" }, { transform: "none" }], { duration: 300, easing: "ease-out" });
-    } else {
-      toast("Copied");
-    }
-  }
-
-  // ---------- Capturing what the visitor copies ----------
-
-  function asURL(text) {
-    if (/\s/.test(text)) return null;
-    let candidate = null;
-    if (/^https?:\/\/\S+$/i.test(text)) candidate = text;
-    else if (/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|org|net|io|dev|app|pt|co|uk|me)(\/\S*)?$/i.test(text)) candidate = "https://" + text;
-    if (!candidate) return null;
-    try {
-      const url = new URL(candidate);
-      return url.hostname.includes(".") ? url : null;
-    } catch { return null; }
-  }
-
-  // A link card shows the page's title; this page knows the titles of its own links and falls back to the address.
-  function titleFor(url) {
-    const path = url.pathname.replace(/\/+$/, "");
-    if (url.hostname === "github.com" && /^\/udsy19\/super-paste/i.test(path)) return "udsy19/super-paste: a clipboard manager for your Mac";
-    if (url.hostname === "udsy19.github.io" && /^\/super-paste/i.test(path)) return "Super Paste, a clipboard manager for your Mac";
-    return url.hostname.replace(/^www\./, "") + (path || "");
-  }
-
-  function classify(text, code) {
-    const item = { id: "clip-" + ++uid, app: "This page", t: Date.now(), boards: [], type: "text", content: text };
-    if (/^#?[0-9a-f]{6}$/i.test(text)) return { ...item, type: "color", content: "#" + text.replace("#", "").toUpperCase() };
-    const url = asURL(text);
-    if (url) return { ...item, type: "link", content: url.href, title: titleFor(url) };
-    item.code = code || /^(curl|git|brew|swift|npm|cd|ssh|open|sudo)\s/.test(text);
-    return item;
-  }
-
-  function capture(raw, { code = false } = {}) {
-    let text = String(raw || "").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-    if (!text) return;
-    if (text.length > 2000) text = text.slice(0, 2000);
-
-    const fresh = classify(text, code);
-    // Copying the same thing again moves it to the front instead of adding a duplicate.
-    const index = items.findIndex((item) => item.type === fresh.type && item.content === fresh.content);
-    let item = fresh;
-    if (index >= 0) {
-      const [old] = items.splice(index, 1);
-      nodes.delete(old.id);
-      const oldNode = document.getElementById(old.id);
-      if (oldNode) oldNode.dataset.leaving = "true";
-      item = { ...fresh, boards: old.boards };
-    }
-    items.unshift(item);
-    for (const dropped of items.splice(MAX_ITEMS)) nodes.delete(dropped.id);
-
-    // Show the whole history again if the current pinboard or search would hide the new card.
-    if (!inScope(item)) {
-      board = "clipboard";
-      query = "";
-      search.value = "";
-      syncControls();
-      build(visibleItems());
-      select(item.id, { scroll: false });
-      if (motion()) list.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
-    } else {
-      insertFront(item);
-    }
-
-    const label = `${TYPE_LABELS[item.type]} from this page`;
-    announce(`Added to the strip: ${label}.`);
-    if (document.documentElement.dataset.strip === "collapsed") toast("Added to the strip", "Show the strip to see it.");
-  }
-
-  function insertFront(item) {
-    scroller.scrollLeft = 0;
-    const leaving = list.querySelector('[data-leaving="true"]');
-    const before = new Map([...list.children].filter((n) => n !== leaving).map((n) => [n, n.getBoundingClientRect().left]));
-    if (leaving) leaving.remove();
-    const node = cardNode(item);
-    list.prepend(node);
-    shownIds = [...list.children].map((n) => n.id).join();
-    numberCards();
-    select(item.id, { scroll: false });
-    updateScope(list.children.length);
-    if (!motion()) return;
-    before.forEach((left, n) => {
-      const dx = left - n.getBoundingClientRect().left;
-      if (Math.abs(dx) > 0.5) n.animate([{ transform: `translateX(${dx}px)` }, { transform: "translateX(0)" }], { duration: 320, easing: "cubic-bezier(.2,.8,.2,1)" });
-    });
-    node.animate(
-      [
-        { opacity: 0, transform: "translateY(26px) scale(0.92)" },
-        { opacity: 1, transform: "translateY(-4px) scale(1.01)", offset: 0.62 },
-        { opacity: 1, transform: "none" },
-      ],
-      { duration: 340, easing: "cubic-bezier(.2,.7,.3,1)" },
-    );
-  }
-
-  document.addEventListener("copy", () => {
-    if (suppressCopyEvent) return;
-    const active = document.activeElement;
-    let text = "";
-    let source = null;
-    if (active && /^(INPUT|TEXTAREA)$/.test(active.tagName) && typeof active.selectionStart === "number") {
-      text = active.value.slice(active.selectionStart, active.selectionEnd);
-      source = active;
-    } else {
-      const selection = window.getSelection();
-      text = selection ? selection.toString() : "";
-      const anchor = selection && selection.anchorNode;
-      source = anchor ? (anchor.nodeType === 1 ? anchor : anchor.parentElement) : null;
-    }
-    capture(text, { code: !!(source && source.closest("code, pre, .cmd")) });
-  });
-
-  // ---------- Controls ----------
-
-  function syncControls() {
-    tabs.forEach((tab) => tab.setAttribute("aria-pressed", String(tab.dataset.board === board)));
-    const present = query.trim().split(/\s+/).map(fold);
-    tokens.forEach((t) => t.setAttribute("aria-pressed", String(present.includes(fold(t.dataset.token)))));
-  }
-
-  tabs.forEach((tab) => tab.addEventListener("click", () => {
-    board = tab.dataset.board;
-    syncControls();
-    render();
-  }));
-
-  search.addEventListener("input", () => {
-    query = search.value;
-    syncControls();
-    render();
-  });
-
-  tokens.forEach((t) => t.addEventListener("click", () => {
-    const token = t.dataset.token;
-    const parts = query.trim().split(/\s+/).filter(Boolean);
-    const at = parts.findIndex((p) => fold(p) === fold(token));
-    if (at >= 0) parts.splice(at, 1); else parts.push(token);
-    query = parts.join(" ");
-    search.value = query;
-    syncControls();
-    render();
-  }));
-
-  list.addEventListener("click", (e) => {
-    const card = e.target.closest(".card");
-    if (!card) return;
-    select(card.id);
-    copyCard(card.id);
-  });
-  list.addEventListener("dblclick", (e) => {
-    const card = e.target.closest(".card");
-    if (card) copyCard(card.id, { pasted: true });
-  });
-
-  list.addEventListener("keydown", (e) => {
-    const cards = [...list.children];
-    const modifier = e.metaKey || e.ctrlKey;
-    if (e.key === "Meta" || e.key === "Control") { strip.classList.add("show-nums"); return; }
-    if (!cards.length) return;
-    const at = Math.max(0, cards.findIndex((n) => n.id === selected));
-    let next = null;
-    if (e.key === "ArrowRight") next = cards[Math.min(cards.length - 1, at + 1)];
-    else if (e.key === "ArrowLeft") next = cards[Math.max(0, at - 1)];
-    else if (e.key === "Home") next = cards[0];
-    else if (e.key === "End") next = cards[cards.length - 1];
-    if (next) { e.preventDefault(); select(next.id); return; }
-    if (e.key === "Enter" || (modifier && e.key.toLowerCase() === "c")) {
-      e.preventDefault();
-      if (selected) copyCard(selected);
-    } else if (modifier && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      const card = cards[Number(e.key) - 1];
-      if (card) { select(card.id); copyCard(card.id); }
-    }
-  });
-  list.addEventListener("keyup", (e) => { if (e.key === "Meta" || e.key === "Control") strip.classList.remove("show-nums"); });
-  list.addEventListener("blur", () => strip.classList.remove("show-nums"));
-
-  // A vertical wheel scrolls the strip sideways, as in the app.
-  scroller.addEventListener("wheel", (e) => {
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    const max = scroller.scrollWidth - scroller.clientWidth;
-    if (max <= 0 || (e.deltaY < 0 && scroller.scrollLeft <= 0) || (e.deltaY > 0 && scroller.scrollLeft >= max)) return;
-    scroller.scrollLeft += e.deltaY;
-    e.preventDefault();
-  }, { passive: false });
-
-  const toggle = $("[data-strip-toggle]");
-  const stripBody = $("#strip-body");
-  function setCollapsed(collapsed) {
-    document.documentElement.dataset.strip = collapsed ? "collapsed" : "open";
-    toggle.setAttribute("aria-expanded", String(!collapsed));
-    $("[data-toggle-label]").textContent = collapsed ? "Show" : "Hide";
-    stripBody.inert = collapsed;
-  }
-  toggle.addEventListener("click", () => setCollapsed(document.documentElement.dataset.strip !== "collapsed"));
-
-  $$("[data-copy]").forEach((chip) => chip.addEventListener("click", async () => {
-    const text = chip.dataset.copy;
-    if (!(await writeClipboard(text))) { toast("Couldn’t copy", "Your browser blocked it. Select the text and press ⌘C instead."); return; }
-    capture(text);
-    chip.classList.add("is-copied");
-    setTimeout(() => chip.classList.remove("is-copied"), 1600);
-  }));
-
-  $$("[data-copy-cmd]").forEach((button) => button.addEventListener("click", async () => {
-    const text = $("code", button.closest("[data-cmd]")).textContent;
-    if (!(await writeClipboard(text))) { toast("Couldn’t copy", "Your browser blocked it. Select the command and press ⌘C instead."); return; }
-    capture(text, { code: true });
-    button.textContent = "Copied";
-    setTimeout(() => { button.textContent = "Copy"; }, 1600);
-  }));
-
-  // ---------- Paste Stack demo ----------
-
-  const STACK = [
-    { app: "Notes", text: "Sam Ortega" },
-    { app: "Mail", text: "Rua das Flores 28, 2º esq." },
-    { app: "Mail", text: "1200-195 Lisboa, Portugal" },
+  const PIN_COLORS = { red: "var(--h-red)", orange: "var(--h-orange)", yellow: "var(--h-yellow)", green: "var(--h-green)", blue: "var(--h-blue)", purple: "var(--h-purple)", pink: "var(--h-pink)", gray: "var(--h-gray)" };
+  const PINBOARDS = [
+    { id: "travel", name: "Travel", color: "orange" },
+    { id: "work", name: "Work", color: "purple" },
+    { id: "snippets", name: "Snippets", color: "green" },
   ];
-  const stackList = $("[data-stack-list]");
-  const stackCount = $("[data-stack-count]");
-  const target = $("[data-target]");
-  const caret = $(".caret", target);
-  const addButton = $("[data-stack-add]");
-  const pasteButton = $("[data-stack-paste]");
-  const resetButton = $("[data-stack-reset]");
-  let queue = [];
 
-  function stackCard(entry) {
-    const li = document.createElement("li");
-    li.className = "card t-text";
-    const head = APP_COLOURS[entry.app];
-    li.style.setProperty("--h", head);
-    li.style.setProperty("--hfg", textOn(head));
-    li.innerHTML = `<div class="card-head"><span class="card-meta">${esc(entry.app)}</span></div><div class="card-body"><p>${esc(entry.text)}</p></div>`;
-    return li;
+  // kind: text | rich | link | image | files | color. date: today | yesterday | week | month | older.
+  const ITEMS = [
+    { id: "addr", kind: "text", app: "notes", when: "2 minutes ago", date: "today", device: "Studio", title: "Hotel address", pins: ["travel"], text: "Rua Garrett 73, 1200-203 Lisboa" },
+    { id: "flight", kind: "text", app: "mail", when: "25 minutes ago", date: "today", device: "Studio", pins: ["travel"], text: "UA 1931 — SFO → EWR\nSeptember 12, 7:05 AM\nConfirmation: K7Q2LM\n\nUnited Airlines" },
+    { id: "cabin", kind: "link", app: "safari", when: "2 hours ago", date: "today", device: "Studio", pins: ["travel"], url: "https://www.airbnb.com/rooms/48213", host: "airbnb.com", ltitle: "Cabin near Muir Woods with a view", pv: "linear-gradient(160deg, #e8c39e 0%, #c98b5a 45%, #6b3f24 100%)" },
+    { id: "photo", kind: "image", app: "photos", when: "4 hours ago", date: "today", device: "Studio", w: 4032, h: 3024, img: "linear-gradient(170deg, #d9b48f 0%, #a88d8a 45%, #4f5566 100%)" },
+    { id: "brand", kind: "color", app: "meter", when: "5 hours ago", date: "today", device: "Studio", pins: ["work"], hex: "#FF6B35", on: "#fff" },
+    { id: "rebase", kind: "text", app: "terminal", when: "Yesterday", date: "yesterday", device: "MacBook", mono: true, pins: ["snippets"], text: "git rebase -i HEAD~3 && git push --force-with-lease origin strip" },
+    { id: "deck", kind: "files", app: "finder", when: "Yesterday", date: "yesterday", device: "Studio", pins: ["work"], name: "Offsite deck v4.key", path: "~/Documents/Offsite/Offsite deck v4.key" },
+    { id: "quote", kind: "rich", app: "pages", when: "3 days ago", date: "week", device: "MacBook", pins: ["work"], html: "<b>Agenda</b><br>1. Lisbon <i>logistics</i><br>2. Q4 roadmap<br>3. <u>Hiring</u> plan", rbg: "#FFFFFF" },
+    { id: "repo", kind: "link", app: "safari", when: "3 days ago", date: "week", device: "MacBook", pins: ["snippets"], url: "https://github.com/udsy19/super-paste", host: "github.com", ltitle: "udsy19/super-paste: A clipboard manager for your Mac", pv: "linear-gradient(160deg, #2b3137 0%, #0d1117 100%)" },
+    { id: "reply", kind: "text", app: "mail", when: "Last week", date: "month", device: "Studio", title: "Invoice reply", pins: ["work", "snippets"], text: "Thanks for the invoice. It's been approved and will be paid on the next run, within 14 days." },
+    { id: "swift", kind: "text", app: "xcode", when: "Last week", date: "month", device: "MacBook", mono: true, pins: ["snippets"], text: "let query = SearchQuery(parsing: \"app:Mail type:link\")\nlet items = store.search(query, in: .all, limit: 20, offset: 0)" },
+    { id: "logo", kind: "image", app: "safari", when: "2 weeks ago", date: "month", device: "Studio", w: 1200, h: 630, img: "linear-gradient(135deg, #0A7AFF 0%, #B663E0 100%)" },
+  ];
+  const byId = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+
+  const KIND_LABEL = { text: "Text", rich: "Text", link: "Link", image: "Image", files: "File", color: "Color" };
+
+  function card(item, o = {}) {
+    const app = APPS[item.app];
+    const pin = o.pinboard ? PINBOARDS.concat(o.extraPinboards || []).find((p) => p.id === o.pinboard) : null;
+    const hdr = pin ? PIN_COLORS[pin.color] : app.hdr;
+    const title = item.title && (pin || o.titles) ? item.title : KIND_LABEL[item.kind];
+    const head = `<div class="card-hd" style="--hdr:${hdr}"><div class="lab"><b>${esc(title)}</b><span>${esc(item.when)}</span></div>${pin ? '<i class="pin"></i>' : `<svg class="app app-ic" viewBox="0 0 64 64" aria-hidden="true"><use href="#${app.icon}"/></svg>`}</div>`;
+    let body = "", foot = "";
+    switch (item.kind) {
+      case "text":
+        body = `<div class="card-bd text${item.mono ? " mono" : ""}">${esc(item.text)}</div>`;
+        foot = `<div class="card-ft">${item.text.length} characters</div>`;
+        break;
+      case "rich":
+        body = `<div class="card-bd text rich" style="--rbg:${item.rbg}">${item.html}</div>`;
+        foot = `<div class="card-ft">${item.html.replace(/<[^>]+>/g, "").length} characters</div>`;
+        break;
+      case "link":
+        body = `<div class="card-bd link"><div class="pv" style="--pv:${item.pv}"><div class="fav"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#${app.icon}"/></svg></div></div><div class="meta"><b>${esc(item.ltitle)}</b><span>${esc(item.host)}</span></div></div>`;
+        break;
+      case "image":
+        body = `<div class="card-bd image" style="--img:${item.img}"><span class="pill">${item.w} × ${item.h}</span></div>`;
+        break;
+      case "color":
+        body = `<div class="card-bd color" style="--c:${item.hex};--on:${item.on}">${item.hex}</div>`;
+        break;
+      case "files":
+        body = `<div class="card-bd files"><svg class="ficon" viewBox="0 0 64 80" aria-hidden="true"><use href="#ic-file"/></svg><b>${esc(item.name)}</b><span>${esc(item.path)}</span></div>`;
+        break;
+    }
+    const badge = o.number ? `<span class="badge">${o.number}</span>` : "";
+    const plain = o.plain ? `<span class="plain-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg></span>` : "";
+    const label = `${title} from ${app.name}, ${item.when}`;
+    return `<article class="card${o.selected ? " sel" : ""}" data-id="${item.id}" role="listitem" aria-label="${esc(label)}">${head}${body}${foot}${badge}${plain}</article>`;
   }
 
-  function updateStack() {
-    stackCount.textContent = queue.length ? plural(queue.length, "item", "items") : "Empty";
-    [...stackList.children].forEach((li, i) => li.classList.toggle("is-next", i === 0));
-    pasteButton.disabled = queue.length === 0;
+  // ---------- Theme ----------
+  const themeBtn = $("[data-theme-toggle]");
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      const root = document.documentElement;
+      const dark = root.getAttribute("data-theme") === "dark" || (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+      const next = dark ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("sp-theme", next); } catch (e) {}
+    });
   }
 
-  addButton.addEventListener("click", () => {
-    queue = STACK.slice();
-    stackList.replaceChildren(...queue.map(stackCard));
-    $$(".line", target).forEach((line) => line.remove());
-    if (motion()) {
-      [...stackList.children].forEach((li, i) => li.animate(
-        [{ opacity: 0, transform: "translateY(18px) scale(0.94)" }, { opacity: 1, transform: "translateY(-3px)", offset: 0.62 }, { opacity: 1, transform: "none" }],
-        { duration: 320, delay: i * 90, easing: "cubic-bezier(.2,.7,.3,1)", fill: "backwards" },
-      ));
+  // ---------- Copy buttons ----------
+  const toast = $("[data-toast]");
+  let toastTimer;
+  function say(msg) {
+    if (!toast) return;
+    toast.textContent = msg; toast.classList.add("on");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("on"), 1600);
+  }
+  $$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.getAttribute("data-copy")); say("Copied"); }
+    catch (e) { say("Select and copy it by hand"); }
+  }));
+
+  // ---------- Reveal + nav highlight ----------
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -8% 0px" });
+  $$(".reveal").forEach((el) => io.observe(el));
+
+  const navLinks = $$("[data-nav] a");
+  const sections = navLinks.map((a) => $(a.getAttribute("href"))).filter(Boolean);
+  const navIO = new IntersectionObserver((es) => {
+    es.forEach((e) => { if (e.isIntersecting) {
+      navLinks.forEach((a) => a.removeAttribute("aria-current"));
+      const a = navLinks.find((l) => l.getAttribute("href") === "#" + e.target.id);
+      if (a) { a.setAttribute("aria-current", "true"); a.scrollIntoView({ block: "nearest", inline: "center", behavior: reduced ? "auto" : "smooth" }); }
+    } });
+  }, { rootMargin: "-40% 0px -55% 0px" });
+  sections.forEach((s) => navIO.observe(s));
+
+  // A demo runs only while on screen.
+  function whenVisible(el, start, stop) {
+    if (!el) return;
+    const o = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? start() : stop && stop())), { threshold: 0.25 });
+    o.observe(el);
+  }
+
+  // ---------- Hero scene ----------
+  (function scene() {
+    const root = $("[data-scene]");
+    if (!root) return;
+    const strip = $("[data-strip]", root), cardsEl = $("[data-scene-cards]", root), pointer = $("[data-pointer]", root);
+    const notes = $('[data-win="notes"]', root), mail = $('[data-win="mail"]', root), sel = $("[data-sel]", root);
+    const ins1 = $("[data-ins-1]", root), ins2 = $("[data-ins-2]", root), hud = $("[data-hud]", root), mbApp = $("[data-mb-app]", root), mbSp = $("[data-mb-sp]", root);
+    const keys = Object.fromEntries($$("[data-key]", root).map((k) => [k.dataset.key, k]));
+    const stepBtns = $$("[data-step]");
+    const base = ["flight", "cabin", "photo", "brand", "rebase", "deck"];
+    let timers = [], running = false, stepIndex = 0;
+
+    function render(ids, selected) {
+      cardsEl.innerHTML = ids.map((id) => card(byId[id], { selected: id === selected })).join("");
     }
-    addButton.disabled = true;
-    resetButton.hidden = false;
-    updateStack();
-    pasteButton.focus();
-    announce("Three items in the Paste Stack.");
-  });
-
-  pasteButton.addEventListener("click", () => {
-    const entry = queue.shift();
-    if (!entry) return;
-    const first = stackList.firstElementChild;
-    const finish = () => { first.remove(); updateStack(); };
-    if (first && motion()) {
-      first.classList.remove("is-next");
-      first.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(24px)" }], { duration: 180, easing: "ease-in", fill: "forwards" }).finished.then(finish, finish);
-    } else if (first) {
-      finish();
+    function front(which) {
+      notes.classList.toggle("front", which === "notes"); notes.classList.toggle("back", which !== "notes");
+      mail.classList.toggle("front", which === "mail"); mail.classList.toggle("back", which !== "mail");
+      mbApp.textContent = which === "notes" ? "Notes" : "Mail";
+      if (which === "notes") notes.style.zIndex = 3, mail.style.zIndex = 2; else notes.style.zIndex = 2, mail.style.zIndex = 3;
     }
-    const line = document.createElement("span");
-    line.className = "line is-new";
-    line.textContent = entry.text;
-    target.insertBefore(line, caret);
-    pasteButton.disabled = queue.length === 0;
-    if (!queue.length) resetButton.focus();
-    announce(`Pasted ${entry.text}.`);
-  });
+    function key(name, on) { Object.values(keys).forEach((k) => k.classList.remove("on")); if (name && on !== false) keys[name].classList.add("on"); }
+    function move(x, y) { pointer.style.left = `calc(${x} * var(--k))`; pointer.style.top = `calc(${y} * var(--k))`; }
+    function click() { pointer.classList.remove("click"); void pointer.offsetWidth; pointer.classList.add("click"); }
+    function at(ms, fn) { timers.push(setTimeout(fn, reduced ? 0 : ms)); }
+    function clear() { timers.forEach(clearTimeout); timers = []; }
+    function mark(i) { stepIndex = i; stepBtns.forEach((b) => b.toggleAttribute("aria-current", false)); if (stepBtns[i]) stepBtns[i].setAttribute("aria-current", "step"); }
 
-  resetButton.addEventListener("click", () => {
-    queue = [];
-    stackList.replaceChildren();
-    $$(".line", target).forEach((line) => line.remove());
-    addButton.disabled = false;
-    resetButton.hidden = true;
-    updateStack();
-    addButton.focus();
-  });
+    // Initial state.
+    function reset() {
+      clear(); strip.classList.remove("open", "closing"); sel.classList.remove("on"); hud.classList.remove("on"); key(null);
+      ins1.textContent = ""; ins2.textContent = ""; front("mail"); move(52, 32); render(base, null);
+    }
 
-  // ---------- Start ----------
+    // Steps are absolute times in one loop. Each step can also be started on its own.
+    const STEPS = [
+      function copy() { // 0: copy in Notes
+        mark(0); front("notes"); move(20, 23);
+        at(600, () => { sel.classList.add("on"); });
+        at(1200, () => { key("copy"); hud.classList.add("on"); mbSp.classList.add("pulse"); });
+        at(1900, () => { hud.classList.remove("on"); mbSp.classList.remove("pulse"); });
+        at(2400, () => { key(null); next(); });
+      },
+      function open() { // 1: ⇧⌘V, strip rises with the new card at the front
+        mark(1); front("mail"); move(60, 36);
+        at(500, () => key("open"));
+        at(1000, () => { strip.classList.add("open"); render(["addr"].concat(base), "addr"); });
+        at(2300, () => { key(null); next(); });
+      },
+      function ret() { // 2: Return pastes the address into Mail
+        mark(2);
+        at(300, () => key("return"));
+        at(900, () => { strip.classList.add("closing"); strip.classList.remove("open"); });
+        at(1200, () => { ins1.textContent = "Rua Garrett 73, 1200-203 Lisboa\n"; });
+        at(2200, () => { key(null); strip.classList.remove("closing"); next(); });
+      },
+      function pick() { // 3: open again, move the selection to an older card
+        mark(3); move(60, 36);
+        at(300, () => key("open"));
+        at(800, () => { strip.classList.add("open"); render(["addr"].concat(base), "addr"); });
+        at(1500, () => key("arrows"));
+        at(1700, () => render(["addr"].concat(base), "flight"));
+        at(2200, () => render(["addr"].concat(base), "cabin"));
+        at(2800, () => { key(null); next(); });
+      },
+      function dbl() { // 4: double-click the link card; it lands in Mail
+        mark(4);
+        at(200, () => { move(56, 62); });
+        at(900, () => { key("dbl"); click(); });
+        at(1400, () => { strip.classList.add("closing"); strip.classList.remove("open"); });
+        at(1700, () => { ins2.textContent = "Booking: airbnb.com/rooms/48213"; });
+        at(3400, () => { key(null); strip.classList.remove("closing"); render(base, null); next(); });
+      },
+    ];
+    function next() { if (!running) return; const i = (stepIndex + 1) % STEPS.length; if (i === 0) { reset(); at(600, () => STEPS[0]()); } else STEPS[i](); }
+    function go(i) { clear(); running = true; // rebuild the state the step expects
+      strip.classList.remove("open", "closing"); sel.classList.remove("on"); hud.classList.remove("on"); key(null); front("mail");
+      ins1.textContent = i >= 3 ? "Rua Garrett 73, 1200-203 Lisboa\n" : ""; ins2.textContent = "";
+      render(i >= 1 ? ["addr"].concat(base) : base, null);
+      STEPS[i]();
+    }
+    function start() { if (running) return; running = true; reset(); at(400, () => STEPS[0]()); }
+    function stop() { running = false; clear(); }
 
-  strip.hidden = false;
-  setCollapsed(false);
-  syncControls();
-  build(visibleItems());
-  setInterval(tick, 15e3);
+    stepBtns.forEach((b) => b.addEventListener("click", () => go(+b.dataset.step)));
+    $("[data-replay]")?.addEventListener("click", () => go(0));
+    reset();
+    if (reduced) { // a still: strip open, a card selected, both pastes done
+      strip.classList.add("open"); render(["addr"].concat(base), "cabin"); ins1.textContent = "Rua Garrett 73, 1200-203 Lisboa\n"; ins2.textContent = "Booking: airbnb.com/rooms/48213"; mark(4);
+      stepBtns.forEach((b) => b.addEventListener("click", () => go(+b.dataset.step)));
+    } else {
+      whenVisible(root, start, stop);
+    }
+  })();
+
+  // ---------- Types gallery ----------
+  (function types() {
+    const el = $("[data-types]");
+    if (!el) return;
+    const rows = [
+      ["flight", "Text", "Plain text keeps its line breaks. The footer counts characters; the preview shows the first 20 000."],
+      ["quote", "Rich text", "Fonts, bold, lists and the text's own background colour survive. ⇧↩ pastes it plain."],
+      ["cabin", "Link", "The page's title, domain and preview image, fetched the way a browser would. ⌘O opens it."],
+      ["photo", "Image", "The image itself, with its pixel size. Previews show it full size; the clipboard gets the original."],
+      ["deck", "File", "Files copied in Finder, with their icon, name and path. ⌘O opens; Reveal in Finder from the menu."],
+      ["brand", "Colour", "A #RRGGBB value fills the whole card and reads in light or dark text, whichever is legible."],
+    ];
+    el.innerHTML = rows.map(([id, name, text], i) => `<figure>${card(byId[id], { selected: i === 2 })}<figcaption><b>${name}</b>${text}</figcaption></figure>`).join("");
+  })();
+
+  // ---------- Search playground ----------
+  (function search() {
+    const input = $("[data-search-input]"), box = $("[data-searchbox]"), tokens = $("[data-search-tokens]"), cards = $("[data-search-cards]"), count = $("[data-search-count]");
+    if (!input) return;
+    const FILTERS = ["app", "type", "title", "date", "device", "pinboard"];
+    const TYPE = { text: "text", texts: "text", rich: "text", richtext: "text", html: "text", link: "link", links: "link", url: "link", urls: "link", image: "image", images: "image", picture: "image", pictures: "image", photo: "image", photos: "image", file: "file", files: "file", color: "color", colors: "color", colour: "color", colours: "color" };
+    const KIND = { text: "text", rich: "text", link: "link", image: "image", files: "file", color: "color" };
+    const DATES = { today: ["today"], yesterday: ["yesterday"], thisweek: ["today", "yesterday", "week"], last7days: ["today", "yesterday", "week"], thismonth: ["today", "yesterday", "week", "month"], last30days: ["today", "yesterday", "week", "month"], thisyear: ["today", "yesterday", "week", "month", "older"] };
+
+    function parse(text) {
+      const words = [], re = /"([^"]*)"?|(\S+)/g; let m;
+      while ((m = re.exec(text))) words.push({ t: m[1] !== undefined ? m[1] : m[2], q: m[1] !== undefined });
+      const comps = [];
+      for (const w of words) {
+        const c = w.t.indexOf(":");
+        if (!w.q && c > 0 && FILTERS.includes(w.t.slice(0, c).toLowerCase())) {
+          let v = w.t.slice(c + 1).replace(/^"|"$/g, "");
+          if (v) comps.push({ f: w.t.slice(0, c).toLowerCase(), v });
+        } else if (w.t) comps.push({ tok: w.t });
+      }
+      return comps;
+    }
+    const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    function textOf(i) { return [i.title, i.text, i.ltitle, i.url, i.name, i.path, i.hex, i.html?.replace(/<[^>]+>/g, " ")].filter(Boolean).join(" "); }
+    function matches(i, comps) {
+      const groups = {};
+      for (const c of comps) {
+        if (c.tok) { const words = norm(textOf(i)).split(/[^\p{L}\p{N}#]+/u); if (!words.some((w) => w.startsWith(norm(c.tok)))) return false; continue; }
+        (groups[c.f] ||= []).push(c.v);
+      }
+      for (const [f, vs] of Object.entries(groups)) {
+        const ok = vs.some((v) => {
+          const n = norm(v);
+          if (f === "app") return norm(APPS[i.app].name).startsWith(n);
+          if (f === "type") return TYPE[n] === KIND[i.kind];
+          if (f === "device") return norm(i.device).startsWith(n);
+          if (f === "pinboard") return (i.pins || []).some((p) => norm(PINBOARDS.find((b) => b.id === p).name) === n);
+          if (f === "title") return !!i.title && norm(i.title).includes(n);
+          if (f === "date") { const k = n.replace(/[\s_-]/g, ""); return (DATES[k] || []).includes(i.date); }
+          return false;
+        });
+        if (!ok) return false;
+      }
+      return true;
+    }
+    function run() {
+      const comps = parse(input.value);
+      box.classList.toggle("has", input.value.length > 0);
+      tokens.innerHTML = comps.filter((c) => c.f).map((c) => `<span class="tok" style="--hdr:${c.f === "pinboard" ? PIN_COLORS[(PINBOARDS.find((b) => norm(b.name) === norm(c.v)) || {}).color] || "var(--ink-3)" : "var(--ink-3)"}"><i></i>${esc(c.f)}:${esc(c.v)}</span>`).join("");
+      const hits = ITEMS.filter((i) => matches(i, comps));
+      cards.innerHTML = hits.length ? hits.map((i) => card(i)).join("") : `<div class="empty" style="width:100%">Nothing found</div>`;
+      count.textContent = comps.length ? `${hits.length} of ${ITEMS.length} items match. Nothing you type here is saved.` : `${ITEMS.length} items in this demo history. Nothing you type here is saved.`;
+    }
+    input.addEventListener("input", run);
+    $("[data-search-clear]").addEventListener("click", () => { input.value = ""; run(); input.focus(); });
+    $$("[data-search-try] button").forEach((b) => b.addEventListener("click", () => { input.value = b.dataset.q; run(); input.focus(); }));
+    input.addEventListener("keydown", (e) => { if (e.key === "Escape") { input.value = ""; run(); } });
+    run();
+  })();
+
+  // ---------- Pinboards ----------
+  (function pinboards() {
+    const demo = $("[data-pin-demo]");
+    if (!demo) return;
+    const tabsEl = $("[data-pin-tabs]", demo), cardsEl = $("[data-pin-cards]", demo), status = $("[data-pin-status]", demo), pop = $("[data-pin-pop]", demo), nameIn = $("[data-pin-name]", demo), colorsEl = $("[data-pin-colors]", demo);
+    const boards = PINBOARDS.map((b) => ({ ...b }));
+    const extra = { id: "recipes", name: "Recipes", color: "pink", items: ["quote", "reply"] };
+    let lists = [{ id: "history", name: "Clipboard" }].concat(boards), cur = 0, created = false;
+
+    function itemsFor(list) {
+      if (list.id === "history") return ITEMS.slice(0, 7);
+      if (list.id === extra.id) return extra.items.map((id) => byId[id]);
+      return ITEMS.filter((i) => (i.pins || []).includes(list.id));
+    }
+    function draw() {
+      tabsEl.innerHTML = lists.map((l, i) => l.id === "history"
+        ? `<button class="tab${i === cur ? " on" : ""}" type="button" data-i="${i}"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5M12 7v5l3 2"/></svg>Clipboard</button>`
+        : `<button class="tab${i === cur ? " on" : ""}" type="button" data-i="${i}" style="--c:${PIN_COLORS[l.color]}"><i class="dot"></i>${esc(l.name)}</button>`).join("") + `<button class="tab add" type="button" data-pin-plus aria-label="Create pinboard">+</button>`;
+      const list = lists[cur];
+      const items = itemsFor(list);
+      cardsEl.innerHTML = items.length ? items.map((i) => card(i, { pinboard: list.id === "history" ? null : list.id, extraPinboards: [extra] })).join("") : `<div class="empty" style="width:100%">Pinboard is empty</div>`;
+      status.innerHTML = list.id === "history" ? `<b>Clipboard</b> · the history, headers in app colours` : `<b>${esc(list.name)}</b> · ${items.length} pinned · headers take the pinboard colour`;
+      $$("[data-i]", tabsEl).forEach((b) => b.addEventListener("click", () => { cur = +b.dataset.i; pop.classList.remove("on"); draw(); }));
+      $("[data-pin-plus]", tabsEl).addEventListener("click", add);
+    }
+    function add() {
+      if (!created) { created = true; lists.push({ ...extra }); }
+      cur = lists.length - 1; draw(); pop.classList.add("on"); nameIn.value = lists[cur].name; nameIn.focus(); nameIn.select();
+      colorsEl.innerHTML = Object.entries(PIN_COLORS).map(([k, v]) => `<button type="button" class="${lists[cur].color === k ? "on" : ""}" style="--c:${v}" data-c="${k}" aria-label="${k}"><i></i></button>`).join("");
+      $$("[data-c]", colorsEl).forEach((b) => b.addEventListener("click", () => { lists[cur].color = b.dataset.c; extra.color = b.dataset.c; draw(); pop.classList.add("on"); $$("[data-c]", colorsEl).forEach((x) => x.classList.toggle("on", x === b)); }));
+    }
+    nameIn.addEventListener("input", () => { if (lists[cur].id === extra.id) { lists[cur].name = nameIn.value || "Pinboard"; extra.name = lists[cur].name; const t = $$("[data-i]", tabsEl)[cur]; if (t) t.lastChild.textContent = lists[cur].name; status.innerHTML = `<b>${esc(lists[cur].name)}</b> · rename it, pick a colour`; } });
+    nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === "Escape") { pop.classList.remove("on"); demo.focus(); } });
+    const step = (d) => { cur = (cur + d + lists.length) % lists.length; pop.classList.remove("on"); draw(); };
+    $("[data-pin-prev]", demo).addEventListener("click", () => step(-1));
+    $("[data-pin-next]", demo).addEventListener("click", () => step(1));
+    $("[data-pin-add]", demo).addEventListener("click", add);
+    demo.addEventListener("keydown", (e) => {
+      if (e.target === nameIn) return;
+      if ((e.metaKey || e.ctrlKey) && e.key === "ArrowRight") { e.preventDefault(); step(1); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+    });
+    document.addEventListener("click", (e) => { if (!pop.contains(e.target) && !e.target.closest("[data-pin-plus],[data-pin-add]")) pop.classList.remove("on"); });
+    draw();
+  })();
+
+  // ---------- Paste Stack ----------
+  (function stack() {
+    const demo = $("[data-stack-demo]");
+    if (!demo) return;
+    const list = $("[data-stack-list]", demo), empty = $("[data-stack-empty]", demo), fields = $$("[data-field]", demo), status = $("[data-stack-status]", demo), steps = $$("[data-stack-steps] li");
+    const ICON = { text: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h12M4 18h8"/></svg>', link: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>' };
+    const ITEMS3 = [{ t: "Priya Natarajan", k: "text" }, { t: "priya@example.com", k: "link" }, { t: "Rua Garrett 73, 1200-203 Lisboa", k: "text" }];
+    const STATES = [
+      { stack: [], filled: 0, focus: -1, text: "The clipboard works as usual. Press <b>⇧⌘C</b> to start a Paste Stack." },
+      { stack: [], filled: 0, focus: -1, text: "<b>Paste Stack</b> panel opened, empty. Everything you copy now lands in it." },
+      { stack: [0, 1, 2], filled: 0, focus: -1, text: "Copied the name, the email, the address from the spreadsheet. Three rows, in order." },
+      { stack: [1, 2], filled: 1, focus: 0, text: "Clicked into <b>Name</b>, pressed <b>⌘V</b>: the first item is pasted and leaves the stack." },
+      { stack: [], filled: 3, focus: 2, text: "<b>⇥ ⌘V</b>, <b>⇥ ⌘V</b>: email, then address. The stack is empty." },
+      { stack: null, filled: 3, focus: -1, text: "<b>⇧⌘C</b> closes the panel. ⌘V is a normal paste again." },
+    ];
+    let i = 0, timer = null;
+    function draw() {
+      const s = STATES[i];
+      demo.querySelector(".stack-panel").style.opacity = s.stack === null || i === 0 ? 0.35 : 1;
+      list.innerHTML = (s.stack || []).map((n, idx) => `<li class="${idx === 0 && s.filled > 0 ? "next" : ""}">${ICON[ITEMS3[n].k]}<span>${esc(ITEMS3[n].t)}</span></li>`).join("");
+      empty.style.display = s.stack && s.stack.length ? "none" : "";
+      fields.forEach((f, n) => { const was = f.textContent; f.textContent = n < s.filled ? ITEMS3[n].t : ""; f.classList.toggle("focus", n === s.focus); f.classList.toggle("filled", n < s.filled && was !== ITEMS3[n].t); });
+      status.innerHTML = s.text;
+      steps.forEach((li, n) => li.classList.toggle("on", n === i - 1));
+    }
+    const go = (n) => { i = (n + STATES.length) % STATES.length; draw(); };
+    $("[data-stack-next]", demo).addEventListener("click", () => { stopPlay(); go(i + 1); });
+    $("[data-stack-prev]", demo).addEventListener("click", () => { stopPlay(); go(i - 1); });
+    const playBtn = $("[data-stack-play]", demo);
+    function stopPlay() { if (timer) { clearInterval(timer); timer = null; playBtn.textContent = "Play"; } }
+    playBtn.addEventListener("click", () => { if (timer) return stopPlay(); go(0); playBtn.textContent = "Stop"; timer = setInterval(() => { if (i === STATES.length - 1) return stopPlay(); go(i + 1); }, 1700); });
+    whenVisible(demo, () => {}, stopPlay);
+    draw();
+  })();
+
+  // ---------- Paste anywhere ----------
+  (function paste() {
+    const demo = $("[data-paste-demo]");
+    if (!demo) return;
+    const cards = $("[data-paste-cards]", demo), strip = $("[data-paste-strip]", demo);
+    const ids = ["addr", "flight", "cabin", "photo", "brand", "rebase", "deck", "quote", "repo"];
+    cards.innerHTML = ids.map((id, n) => card(byId[id], { number: n + 1, plain: true, selected: n === 0 })).join("");
+    $$("[data-hold]", demo).forEach((b) => b.addEventListener("click", () => {
+      const on = b.getAttribute("aria-pressed") !== "true";
+      $$("[data-hold]", demo).forEach((x) => x.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", String(on));
+      strip.classList.toggle("show-badges", on && b.dataset.hold === "cmd");
+      strip.classList.toggle("show-plain", on && b.dataset.hold === "shift");
+    }));
+    $$("[data-mode]", demo).forEach((b) => b.addEventListener("click", () => {
+      $$("[data-mode]", demo).forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", String(x === b)); });
+    }));
+  })();
+
+  // ---------- Hot corner peek ----------
+  (function peek() {
+    const demo = $("[data-peek-demo]");
+    if (!demo) return;
+    const strip = $("[data-peek-strip]", demo), corner = $("[data-peek-corner]", demo), pointer = $("[data-peek-pointer]", demo), status = $("[data-peek-status]", demo);
+    strip.innerHTML = ["addr", "cabin", "photo", "brand", "rebase"].map((id) => card(byId[id])).join("");
+    let timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(fn, reduced ? 0 : ms));
+    function play() {
+      timers.forEach(clearTimeout); timers = [];
+      strip.classList.remove("on"); corner.classList.remove("on"); pointer.style.left = "60%"; pointer.style.top = "40%";
+      status.textContent = "Move the pointer into the corner…";
+      at(600, () => { pointer.style.left = "0.5%"; pointer.style.top = "95%"; });
+      at(1600, () => { corner.classList.add("on"); status.textContent = "Resting in the bottom-left corner."; });
+      at(1900, () => { strip.classList.add("on"); status.textContent = "The peek rises: your latest cards, no shortcut."; });
+      at(4200, () => { pointer.style.left = "55%"; pointer.style.top = "45%"; });
+      at(4700, () => { strip.classList.remove("on"); corner.classList.remove("on"); status.textContent = "Pull away and it's gone. Replay to see it again."; });
+    }
+    $("[data-peek-replay]", demo).addEventListener("click", play);
+    if (reduced) { strip.classList.add("on"); corner.classList.add("on"); pointer.style.left = "0.5%"; pointer.style.top = "95%"; status.textContent = "The pointer rests in the corner and the peek shows."; }
+    else whenVisible(demo, play, () => { timers.forEach(clearTimeout); });
+  })();
+
+  // ---------- Sync diagram ----------
+  whenVisible($("[data-sync]"), () => $("[data-sync]").classList.add("run"), () => $("[data-sync]").classList.remove("run"));
 })();
