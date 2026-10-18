@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// then the services that read and write it, the windows that show them last. URLs that launched the app are
     /// routed after this, so every service is in place for them.
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Before the store's first prune: an install still on the old 30-day default keeps everything from now on.
+        if HistoryRetention.migrateLegacyDefault() { Log.app.info("Keep History moved from the old 30-day default to Forever") }
         ClipStoreModule.install()
         ClipboardKitModule.install()
         SyncKitModule.install()

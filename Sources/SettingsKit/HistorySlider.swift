@@ -67,17 +67,23 @@ struct HistorySlider: View {
         }
         switch change {
         case .none: break
-        case .apply(let new): days = new
+        case .apply(let new): set(new)
         case .confirmPrune(let new, _):
             if Alerts.confirm(Strings.General.reduceTitle, info: Strings.General.eraseText,
                               confirmTitle: Strings.Action.delete, destructive: true) {
-                days = new
+                set(new)
                 do { try Services.store?.prune(retentionDays: new, now: Date()) } catch {
                     Alerts.error(Strings.General.reduceTitle, error)
                 }
             }
         }
         dragging = nil
+    }
+
+    /// A value the user chose: from now on it is theirs, never a default to migrate.
+    private func set(_ new: Int) {
+        days = new
+        Defaults[.historyRetentionUserSet] = true
     }
 }
 

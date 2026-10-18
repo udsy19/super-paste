@@ -9,6 +9,7 @@ func registerCoreTests() {
     SelfTest.cases.append(("Core.searchQuery", { coreSearchQuery() }))
     SelfTest.cases.append(("Core.dateRanges", { coreDateRanges() }))
     SelfTest.cases.append(("Core.retentionSlider", { coreRetention() }))
+    SelfTest.cases.append(("Core.retentionMigration", { coreRetentionMigration() }))
     SelfTest.cases.append(("Core.themeMetrics", { coreThemeMetrics() }))
     SelfTest.cases.append(("Core.contentRules", { coreContentRules() }))
     SelfTest.cases.append(("Core.routes", { coreRoutes() }))
@@ -92,7 +93,8 @@ private func coreModelCodable() {
 private func coreSettingsDefaults() {
     check(Defaults[.openAtLogin] == false && Defaults[.isStatusItemEnabled] && Defaults[.isSoundEffectsEnabled], "general toggles")
     check(Defaults[.isDirectPasteEnabled] && !Defaults[.isPasteAsPlainTextEnabled], "paste to active app, rich text")
-    check(Defaults[.historyRetentionDays] == 30 && !Defaults[.isDirectPastePromptSuppressed], "retention, direct-paste prompt")
+    check(Defaults[.historyRetentionDays] == HistoryRetention.forever && !Defaults[.historyRetentionUserSet]
+          && !Defaults[.isDirectPastePromptSuppressed], "Keep History forever, untouched; direct-paste prompt")
     let apps = Defaults[.ignoredBundleIdentifiers]
     check(apps.count == 14 && apps.first == "com.apple.Passwords" && apps.last == ".nordpass", "14 password managers, in order")
     let types = Defaults[.ignoredPasteboardTypes]
@@ -202,6 +204,21 @@ private func coreDateRanges() {
           "start inclusive, end exclusive")
     check(SearchQuery(parsing: "date:today date:bogus").dateRanges(now: now, calendar: calendar)?.count == 1, "bad values drop out")
     check(SearchQuery(parsing: "x").dateRanges(now: now, calendar: calendar) == nil, "no date filter")
+}
+
+/// An install left on 1.0.1's 30-day default moves to Forever once; a value the user chose stays, 30 included.
+private func coreRetentionMigration() {
+    defer { Defaults.reset(.historyRetentionDays); Defaults.reset(.historyRetentionUserSet) }
+    check(!HistoryRetention.migrateLegacyDefault() && Defaults[.historyRetentionDays] == 0, "a fresh install has nothing to migrate")
+    Defaults[.historyRetentionDays] = 30
+    check(HistoryRetention.migrateLegacyDefault() && Defaults[.historyRetentionDays] == 0, "the old default becomes Forever")
+    check(!HistoryRetention.migrateLegacyDefault(), "only once")
+    Defaults[.historyRetentionDays] = 30
+    Defaults[.historyRetentionUserSet] = true
+    check(!HistoryRetention.migrateLegacyDefault() && Defaults[.historyRetentionDays] == 30, "30 days the user chose stays")
+    Defaults[.historyRetentionUserSet] = false
+    Defaults[.historyRetentionDays] = 7
+    check(!HistoryRetention.migrateLegacyDefault() && Defaults[.historyRetentionDays] == 7, "other values aren't touched")
 }
 
 private func coreRetention() {

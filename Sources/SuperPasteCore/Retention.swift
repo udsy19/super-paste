@@ -47,4 +47,16 @@ public enum HistoryRetention {
     public static func cutoff(days: Int, now: Date = Date()) -> Date? {
         days <= 0 ? nil : now.addingTimeInterval(-Double(days) * 86_400)
     }
+
+    /// What 1.0.1 installs stored without the user ever choosing it.
+    public static let legacyDefaultDays = 30
+
+    /// Moves an install that still holds the old 30-day default to Forever, once, unless the user set Keep History
+    /// themselves (`historyRetentionUserSet`). Runs before the store's first prune, so nothing older than 30 days is
+    /// deleted on the way. Returns whether it migrated.
+    @discardableResult public static func migrateLegacyDefault() -> Bool {
+        guard !Defaults[.historyRetentionUserSet], Defaults[.historyRetentionDays] == legacyDefaultDays else { return false }
+        Defaults[.historyRetentionDays] = forever
+        return true
+    }
 }

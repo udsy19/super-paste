@@ -50,9 +50,12 @@ public extension Defaults.Keys {
     /// Paste Items: true = To active app (paste directly), false = To clipboard.
     static let isDirectPasteEnabled = Key<Bool>("isDirectPasteEnabled", default: true)
     static let isPasteAsPlainTextEnabled = Key<Bool>("isPasteAsPlainTextEnabled", default: false)
-    /// Keep History in days; 0 = Forever (`HistoryRetention`). The reference sets it during onboarding; 30 days
-    /// until then.
-    static let historyRetentionDays = Key<Int>("historyRetentionDays", default: 30)
+    /// Keep History in days; 0 = Forever (`HistoryRetention`). Forever by default: what you copied stays until you
+    /// delete it. (1.0.1 defaulted to 30 days; `HistoryRetention.migrateLegacyDefault()` moves untouched installs on.)
+    static let historyRetentionDays = Key<Int>("historyRetentionDays", default: HistoryRetention.forever)
+    /// Whether the user ever moved the Keep History slider. While false, the stored value is a default and may be
+    /// migrated.
+    static let historyRetentionUserSet = Key<Bool>("historyRetentionUserSet", default: false)
     /// "Do not ask again" on the direct-paste prompt (paste goes to the clipboard without asking).
     static let isDirectPastePromptSuppressed = Key<Bool>("isDirectPastePromptSuppressed", default: false)
 

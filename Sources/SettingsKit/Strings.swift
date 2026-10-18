@@ -49,7 +49,7 @@ enum Strings {
         static let allowAccessibility = "Allow Accessibility Access"
         static let plainText = "Always paste as Plain Text"
         static let keepHistory = "Keep History"
-        static let keepHistoryInfo = "Pinned items are never deleted."
+        static let keepHistoryInfo = "How long copied items stay. Pinned items are kept until you delete them, whatever the limit."
         static let forever = "Forever"
         static let unlimitedTooltip = "Unlimited history may increase your disk space usage"
         static let eraseHistory = "Erase History…"
