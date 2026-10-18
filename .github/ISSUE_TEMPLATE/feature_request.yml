@@ -1,0 +1,45 @@
+name: Feature request
+description: An idea for something Super Paste should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, not the solution. What do you copy, where does it go, what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Super Paste to do?
+      description: How it would look or behave; which shortcut, menu or setting it would live under.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - History and cards
+        - Search
+        - Pinboards
+        - Paste Stack
+        - Pasting
+        - Hot corner
+        - Privacy
+        - Sync
+        - MCP / automation
+        - Settings
+        - Website or docs
+        - Other
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This would need network access or a new permission (say which, above).

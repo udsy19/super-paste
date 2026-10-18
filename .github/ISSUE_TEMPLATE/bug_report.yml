@@ -1,0 +1,86 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please don't paste clipboard contents you wouldn't want public, and report security
+        issues privately through [SECURITY.md](../blob/main/SECURITY.md) instead.
+  - type: input
+    id: version
+    attributes:
+      label: Super Paste version
+      description: Settings → About, or the menu bar menu → About.
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 26.0.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Mac
+      options:
+        - Apple silicon
+        - Intel
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How was it installed?
+      options:
+        - One-line installer
+        - DMG
+        - Built from source
+  - type: input
+    id: apps
+    attributes:
+      label: Apps involved
+      description: The app you copied from and/or pasted into, if the bug involves one.
+      placeholder: "Copied from Safari, pasted into Mail"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Press ⇧⌘V
+        2. Type "app:Mail"
+        3. Press Return
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Renders, screenshots or a short recording help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Console.app, filtered by `com.udsy.superpaste`, around the time of the problem.
+      render: text
+  - type: checkboxes
+    id: settings
+    attributes:
+      label: Relevant settings
+      options:
+        - label: Paste Items is set to "To clipboard"
+        - label: Accessibility is not allowed
+        - label: Folder sync is on
+        - label: MCP is enabled
+        - label: Always paste as Plain Text is on

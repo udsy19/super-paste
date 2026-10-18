@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/udsy19/super-paste/security/advisories/new
+    about: Report a vulnerability privately. Please don't open a public issue for it.
+  - name: User guide
+    url: https://github.com/udsy19/super-paste/blob/main/docs/USAGE.md
+    about: How every feature works, with the shortcut and search syntax reference.
