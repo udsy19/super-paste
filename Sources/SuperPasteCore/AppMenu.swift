@@ -47,17 +47,16 @@ public extension NSMenuItem {
 // MARK: - App menu
 
 /// The app menu (behaviour.md §6.2, ui-reference §10), shared by the menu bar item and the strip's "…" button.
-/// Built fresh each time it opens, so the shortcuts and the pause state are current:
+/// Built fresh each time it opens, so the pause state is current:
 ///
-///     Open Super Paste        ⇧⌘V   (the activation shortcut)
-///     Paste Stack             ⇧⌘C   (ticked while open)
+///     About Super Paste
+///     ─
 ///     New Text Item           ⌘N
+///     Settings…               ⌘,
+///     ─
+///     Help ▸                        Getting Started, Keyboard Shortcuts, Help Center, Feature Request, Contact Support
 ///     ─
 ///     Pause ▸                       (titled "Paused until HH:mm" while paused)
-///     ─
-///     Settings…               ⌘,
-///     Getting Started
-///     About Super Paste
 ///     ─
 ///     Quit Super Paste        ⌘Q
 ///
@@ -65,43 +64,61 @@ public extension NSMenuItem {
 @MainActor
 public enum AppMenu {
     public enum Title {
-        public static let open = "Open Super Paste"
-        public static let pasteStack = "Paste Stack"
+        public static let about = "About Super Paste"
         public static let newTextItem = "New Text Item"
+        public static let settings = "Settings…"
+        public static let help = "Help"
+        public static let gettingStarted = "Getting Started"
+        public static let keyboardShortcuts = "Keyboard Shortcuts"
+        public static let helpCenter = "Help Center"
+        public static let featureRequest = "Feature Request"
+        public static let contactSupport = "Contact Support"
         public static let pause = "Pause"
         public static let paused = "Paused"
         public static func pausedUntil(_ time: String) -> String { "Paused until \(time)" }
         public static let resume = "Resume"
         public static func pauseFor(_ duration: String) -> String { "Pause for \(duration)" }
         public static let untilResumed = "Until I Resume"
-        public static let settings = "Settings…"
-        public static let gettingStarted = "Getting Started"
-        public static let about = "About Super Paste"
         public static let quit = "Quit Super Paste"
+    }
+
+    /// Where the Help items go.
+    public enum Links {
+        public static let helpCenter = URL(string: "https://udsy19.github.io/super-paste/")!
+        public static let featureRequest = URL(string: "https://github.com/udsy19/super-paste/issues/new")!
+        public static let contactSupport = URL(string: "https://github.com/udsy19/super-paste/issues")!
     }
 
     public static func make() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.addItem(.make(Title.open, symbol: "doc.on.clipboard", shortcut: Defaults[.activationShortcut]) {
-            Services.strip?.show(nil)
-        })
-        let stack = NSMenuItem.make(Title.pasteStack, symbol: "square.2.stack.3d", shortcut: Defaults[.pasteStackShortcut]) {
-            Services.pasting?.togglePasteStack()
-        }
-        stack.state = Services.pasting?.isPasteStackActive == true ? .on : .off
-        menu.addItem(stack)
+        menu.addItem(.make(Title.about, symbol: "info.circle") { Services.settings?.show(pane: .about) })
+        menu.addItem(.separator())
         menu.addItem(.make(Title.newTextItem, symbol: "square.and.pencil", key: "n") { Services.strip?.show(.newTextItem) })
+        menu.addItem(.make(Title.settings, symbol: "gear", key: ",") { Services.settings?.show(pane: nil) })
+        menu.addItem(.separator())
+        let help = NSMenuItem(title: Title.help, action: nil, keyEquivalent: "").withSymbol("questionmark.circle")
+        help.submenu = makeHelpMenu()
+        menu.addItem(help)
         menu.addItem(.separator())
         let pause = NSMenuItem(title: pauseStatus ?? Title.pause, action: nil, keyEquivalent: "").withSymbol("pause.circle")
         pause.submenu = makePauseMenu()
         menu.addItem(pause)
         menu.addItem(.separator())
-        menu.addItem(.make(Title.settings, symbol: "gear", key: ",") { Services.settings?.show(pane: nil) })
-        menu.addItem(.make(Title.gettingStarted, symbol: "flag") { Services.onboarding?.show() })
-        menu.addItem(.make(Title.about, symbol: "info.circle") { Services.settings?.show(pane: .about) })
-        menu.addItem(.separator())
         menu.addItem(.make(Title.quit, symbol: "xmark.app", key: "q") { NSApp.terminate(nil) })
+        return menu
+    }
+
+    /// Help ▸: onboarding again, the Shortcuts pane, the website, then the GitHub issue pages.
+    public static func makeHelpMenu() -> NSMenu {
+        let menu = NSMenu(title: Title.help)
+        menu.autoenablesItems = false
+        menu.addItem(.make(Title.gettingStarted, symbol: "flag") { Services.onboarding?.show() })
+        menu.addItem(.make(Title.keyboardShortcuts, symbol: "keyboard") { Services.settings?.show(pane: .shortcuts) })
+        menu.addItem(.make(Title.helpCenter, symbol: "lifepreserver") { NSWorkspace.shared.open(Links.helpCenter) })
+        menu.addItem(.separator())
+        menu.addItem(.make(Title.featureRequest, symbol: "lightbulb") { NSWorkspace.shared.open(Links.featureRequest) })
+        menu.addItem(.make(Title.contactSupport, symbol: "paperplane") { NSWorkspace.shared.open(Links.contactSupport) })
         return menu
     }
 
