@@ -3,6 +3,16 @@
 All notable changes to Super Paste are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org).
 
+## [1.0.1] — 2026-10-18
+
+### Changed
+- Onboarding is two pages, like Paste's, and ends with the strip open on a Welcome pinboard.
+- If another app already uses ⇧⌘V (or any Super Paste shortcut), you're told once and Settings › Shortcuts shows
+  a warning; Super Paste keeps retrying and takes the shortcut as soon as it's free.
+- Menu bar menu in Paste's order, with an icon that animates on every capture.
+- Cards closer to Paste: file paths, image size pill, colour codes, pinned-only titles, icon-only tabs while
+  searching, and the preview footer.
+
 ## [1.0.0] — 2026-10-18
 
 The first release.
