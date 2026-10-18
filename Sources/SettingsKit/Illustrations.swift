@@ -227,39 +227,3 @@ struct SystemSettingsArt: View {
         .padding(.vertical, 6)
     }
 }
-
-/// A key on the keyboard, for teaching shortcuts.
-struct Keycap: View {
-    let label: String
-
-    var body: some View {
-        Text(label)
-            .font(.system(size: 15, weight: .medium, design: .rounded))
-            .frame(minWidth: 30, minHeight: 30)
-            .padding(.horizontal, label.count > 1 ? 6 : 0)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(nsColor: SPColor.surface2))
-                .shadow(color: .black.opacity(0.18), radius: 0.5, y: 1))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color(nsColor: SPColor.ink10)))
-    }
-}
-
-/// A shortcut as separate keys: "⇧⌘V" → ⇧ ⌘ V.
-struct ShortcutKeys: View {
-    let shortcut: Shortcut?
-
-    var body: some View {
-        HStack(spacing: 4) {
-            if let shortcut {
-                ForEach(Array(Self.keys(of: shortcut).enumerated()), id: \.offset) { _, key in Keycap(label: key) }
-            } else {
-                Text(Strings.Onboarding.notSet).font(.sp(.body)).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// The modifier glyphs one by one, then the key's name.
-    static func keys(of shortcut: Shortcut) -> [String] {
-        let name = Shortcut.keyName(shortcut.keyCode)
-        return shortcut.displayString.dropLast(name.count).map(String.init) + [name]
-    }
-}

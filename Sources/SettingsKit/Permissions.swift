@@ -26,7 +26,7 @@ final class PermissionsController: NSObject, PermissionsPresenting, NSWindowDele
         let monitor = PermissionMonitor(kind)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: SPMetrics.Permissions.windowSize),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: true)
-        let view = PermissionScreen(monitor: monitor, embedded: false) { [weak window] in window?.close() }
+        let view = PermissionScreen(monitor: monitor) { [weak window] in window?.close() }
             .padding(.top, 28)
             .padding(.bottom, 40)
             .frame(width: SPMetrics.Permissions.windowSize.width, height: SPMetrics.Permissions.windowSize.height)
@@ -127,21 +127,17 @@ extension PermissionKind {
 }
 
 /// A permission screen: icon, title, subtitle, a System Settings illustration (a green check once granted), then
-/// Not Now and Open System Settings. Onboarding embeds it under its own icon, with Continue as the way on.
+/// Not Now and Open System Settings.
 struct PermissionScreen: View {
     @ObservedObject var monitor: PermissionMonitor
-    /// Inside onboarding: no icon of its own, and `done` moves to the next page.
-    var embedded: Bool
     let done: () -> Void
 
     var body: some View {
         let kind = monitor.kind
         let flow = monitor.flow
         VStack(spacing: 0) {
-            if !embedded {
-                Spacer(minLength: 0)
-                AppIconView(size: SPMetrics.Permissions.iconSize).padding(.bottom, 20)
-            }
+            Spacer(minLength: 0)
+            AppIconView(size: SPMetrics.Permissions.iconSize).padding(.bottom, 20)
             Text(kind.title).font(.system(size: SPMetrics.Onboarding.titleFontSize, weight: .bold))
                 .multilineTextAlignment(.center)
             Text(flow.isGranted ? kind.grantedText : kind.subtitle)
@@ -168,7 +164,7 @@ struct PermissionScreen: View {
             .animation(.easeInOut(duration: 0.25), value: flow.isGranted)
             Spacer(minLength: 0)
             if flow.isGranted {
-                SPButton(title: embedded ? Strings.Action.continue : Strings.Action.done, action: done)
+                SPButton(title: Strings.Action.done, action: done)
                     .keyboardShortcut(.defaultAction)
             } else {
                 HStack(spacing: 8) {

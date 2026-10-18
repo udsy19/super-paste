@@ -22,6 +22,7 @@ func registerSettingsKitTests() {
     SelfTest.cases.append(("SettingsKit.mcpConfig", { settingsMCPConfig() }))
     SelfTest.cases.append(("SettingsKit.syncStatus", { settingsSyncStatus() }))
     SelfTest.cases.append(("SettingsKit.ignoredApps", { settingsIgnoredApps() }))
+    SelfTest.cases.append(("SettingsKit.welcomePinboard", { MainActor.assumeIsolated { settingsWelcomePinboard() } }))
     // Off-screen renders of every pane and screen, for checking the look: SUPERPASTE_RENDER_DIR=<folder>.
     if let folder = ProcessInfo.processInfo.environment["SUPERPASTE_RENDER_DIR"] {
         SelfTest.cases.append(("SettingsKit.render", { MainActor.assumeIsolated { settingsRender(to: URL(fileURLWithPath: folder)) } }))
@@ -180,6 +181,15 @@ private func settingsIgnoredApps() {
     }
     let sync = FakeSync()
     let mcp = FakeMCP()
+    // The Shortcuts pane with its warning row: hold the activation shortcut, then try to register it again.
+    if let activation = Defaults[.activationShortcut] {
+        _ = HotkeyCenter.shared.register(activation, handler: {})
+        _ = HotkeyCenter.shared.register(activation, handler: {})
+    }
+    defer {
+        HotkeyCenter.shared.unregisterAll()
+        HotkeyCenter.shared.forgetUnavailable()
+    }
     Services.sync = sync
     Services.mcp = mcp
     do {
@@ -241,4 +251,34 @@ private func settingsIgnoredApps() {
         return (client, "token")
     }
     func revoke(_ clientID: UUID) { clients.removeAll { $0.id == clientID } }
+}
+
+/// Quick Start's Continue seeds the Welcome pinboard once: four notes and three links with preview art, all
+/// pinned-only; a second run (Help › Getting Started) reuses it; a deleted one is not recreated.
+@MainActor private func settingsWelcomePinboard() {
+    let saved = Services.store
+    let store = StripFakeStore()
+    Services.store = store
+    defer { Services.store = saved; Defaults.reset(.welcomePinboardID) }
+    _ = NSApplication.shared
+
+    guard let board = WelcomeContent.seedIfNeeded() else { check(false, "seeds a pinboard"); return }
+    check(board.name == WelcomeContent.pinboardName && Defaults[.welcomePinboardID] == board.id.uuidString, "remembered by id")
+    let items = store.search(.empty, in: .pinboard(board.id), limit: 50, offset: 0)
+    check(items.count == WelcomeContent.notes.count + WelcomeContent.links.count, "7 items: \(items.count)")
+    check(items.allSatisfy { $0.copiedAt == nil && $0.isPinned(to: board.id) }, "pinned-only, so history stays empty")
+    check(store.count(.empty, in: .history) == 0, "nothing in history")
+    let texts = items.filter { $0.kind == .text }
+    check(texts.map(\.title) == WelcomeContent.notes.map(\.title) && texts.first?.text.contains("⌘O") == true, "the notes, in order")
+    let links = items.filter { $0.kind == .link }
+    check(links.map(\.title) == WelcomeContent.links.map(\.title), "the links, in order")
+    check(links.allSatisfy { $0.link?.image != nil && $0.link?.title != nil }, "links carry a title and preview art")
+    if let art = links.first?.link?.image, let data = store.data(for: art), let image = NSImage(data: data) {
+        check(image.size.width / image.size.height == 640.0 / 360.0, "16:9 art: \(image.size)")
+    } else {
+        check(false, "the art is stored as a blob")
+    }
+    check(WelcomeContent.seedIfNeeded()?.id == board.id && store.pinboards.count == 1, "a second run reuses the pinboard")
+    try? store.deletePinboard(board.id)
+    check(WelcomeContent.seedIfNeeded() == nil && store.pinboards.isEmpty, "a deleted Welcome pinboard stays deleted")
 }

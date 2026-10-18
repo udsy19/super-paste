@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 import SuperPasteCore
 
-/// Onboarding's pages, in order (behaviour.md §8): Paste's Introduction and Quick Start, then Super Paste's
-/// Accessibility step, privacy notes and the two shortcuts to remember.
+/// Onboarding's pages, in order (behaviour.md §8): Introduction, then Quick Start. Permissions are asked for on
+/// demand (the first direct paste), not as onboarding pages.
 enum OnboardingPage: Int, CaseIterable {
-    case intro, quickStart, accessibility, privacy, ready
+    case intro, quickStart
 }
 
 @MainActor
@@ -13,21 +13,23 @@ final class OnboardingModel: ObservableObject {
     @Published var page: OnboardingPage
     /// Quick Start's "Run in background": on the first time through, the current setting after that.
     @Published var openAtLogin: Bool
-    let accessibility = PermissionMonitor(.accessibility)
     let sync = SyncModel(service: Services.sync)
-    var close: () -> Void = {}
+    /// Closes the window; `finished` says whether Quick Start completed (then the strip opens on the Welcome pinboard).
+    var close: (_ finished: Bool) -> Void = { _ in }
 
     init(page: OnboardingPage = .intro) {
         self.page = page
         openAtLogin = Defaults[.isOnboardingCompleted] ? Defaults[.openAtLogin] : true
-        if page == .accessibility { accessibility.start() }
     }
 
     func next() {
-        if page == .quickStart { complete() }
-        guard let following = OnboardingPage(rawValue: page.rawValue + 1) else { close(); return }
-        following == .accessibility ? accessibility.start() : accessibility.stop()
-        withAnimation(.easeInOut(duration: SPMotion.onboardingPageDuration)) { page = following }
+        switch page {
+        case .intro:
+            withAnimation(.easeInOut(duration: SPMotion.onboardingPageDuration)) { page = .quickStart }
+        case .quickStart:
+            complete()
+            close(true)
+        }
     }
 
     /// Quick Start's Continue completes onboarding: it applies the login item and sets the flag.
@@ -38,11 +40,14 @@ final class OnboardingModel: ObservableObject {
 }
 
 /// Shows onboarding in its own 544 × 652 window (ui-reference §12): at launch until completed, and again from the
-/// app menu.
+/// app menu. When Quick Start completes, the window closes, the Welcome pinboard is seeded (once) and the strip
+/// slides up on it, so the first thing after onboarding is Super Paste itself (behaviour.md §8.4).
 @MainActor
 final class OnboardingController: NSObject, OnboardingPresenting, NSWindowDelegate {
     private var window: NSWindow?
     private var model: OnboardingModel?
+    /// How long after the window closes the strip comes up.
+    static let stripDelay: TimeInterval = 0.35
 
     var isCompleted: Bool { Defaults[.isOnboardingCompleted] }
 
@@ -58,7 +63,10 @@ final class OnboardingController: NSObject, OnboardingPresenting, NSWindowDelega
         let size = SPMetrics.Onboarding.windowSize
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: true)
-        model.close = { [weak window] in window?.close() }
+        model.close = { [weak self, weak window] finished in
+            window?.close()
+            if finished { self?.openStrip() }
+        }
         window.contentViewController = NSHostingController(rootView: OnboardingView(model: model)
             .frame(width: size.width, height: size.height)
             .environment(\.spStyle, snapshot ? .classic : .current))
@@ -71,8 +79,15 @@ final class OnboardingController: NSObject, OnboardingPresenting, NSWindowDelega
         return window
     }
 
+    /// The Welcome pinboard (seeded the first time) in the strip, once the window has gone.
+    private func openStrip() {
+        let scope = WelcomeContent.seedIfNeeded().map { ListScope.pinboard($0.id) } ?? .history
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.stripDelay) {
+            MainActor.assumeIsolated { Services.strip?.show(.list(scope)) }
+        }
+    }
+
     func windowWillClose(_ notification: Notification) {
-        model?.accessibility.stop()
         model = nil
         window = nil
     }
@@ -113,20 +128,6 @@ struct OnboardingView: View {
                 QuickStartCard(model: model, sync: model.sync)
             } footer: {
                 SPButton(title: Strings.Action.continue, action: model.next).keyboardShortcut(.defaultAction)
-            }
-        case .accessibility:
-            PermissionScreen(monitor: model.accessibility, embedded: true, done: model.next)
-        case .privacy:
-            OnboardingPageLayout(title: Strings.Onboarding.privateTitle, subtitle: Strings.Onboarding.privateSubtitle) {
-                PrivacyCard()
-            } footer: {
-                SPButton(title: Strings.Action.continue, action: model.next).keyboardShortcut(.defaultAction)
-            }
-        case .ready:
-            OnboardingPageLayout(title: Strings.Onboarding.readyTitle, subtitle: Strings.Onboarding.readySubtitle) {
-                ReadyCard()
-            } footer: {
-                SPButton(title: Strings.Action.done, action: model.next).keyboardShortcut(.defaultAction)
             }
         }
     }
@@ -171,17 +172,12 @@ private struct OnboardingCard<Content: View>: View {
 }
 
 private struct CardRow<Accessory: View>: View {
-    var symbol: String? = nil
     let title: String
     let subtitle: String
     @ViewBuilder var accessory: Accessory
 
     var body: some View {
-        HStack(alignment: symbol == nil ? .center : .top, spacing: 10) {
-            if let symbol {
-                Image(systemName: symbol).font(.system(size: 16)).foregroundStyle(Color.accentColor)
-                    .frame(width: 22)
-            }
+        HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.sp(.body, .medium))
                 Text(subtitle).font(.sp(.callout)).foregroundStyle(.secondary)
@@ -192,12 +188,6 @@ private struct CardRow<Accessory: View>: View {
         }
         .padding(.horizontal, SPMetrics.Onboarding.rowPadding.width)
         .padding(.vertical, SPMetrics.Onboarding.rowPadding.height)
-    }
-}
-
-private extension CardRow where Accessory == EmptyView {
-    init(symbol: String, title: String, subtitle: String) {
-        self.init(symbol: symbol, title: title, subtitle: subtitle) { EmptyView() }
     }
 }
 
@@ -219,7 +209,7 @@ private struct QuickStartCard: View {
             }
             Divider()
             CardRow(title: Strings.Onboarding.shortcut, subtitle: Strings.Onboarding.shortcutInfo) {
-                ShortcutField(setting: .activation)
+                ShortcutField(setting: .activation, width: SPMetrics.Onboarding.shortcutRecorderWidth)
             }
             Divider()
             VStack(alignment: .leading, spacing: 6) {
@@ -230,52 +220,5 @@ private struct QuickStartCard: View {
                     .padding(.bottom, SPMetrics.Onboarding.rowPadding.height)
             }
         }
-    }
-}
-
-/// What stays local and what can leave the Mac, plus why macOS warned about the download.
-private struct PrivacyCard: View {
-    var body: some View {
-        OnboardingCard {
-            CardRow(symbol: "lock.laptopcomputer", title: Strings.Onboarding.localTitle, subtitle: Strings.Onboarding.localInfo)
-            Divider()
-            CardRow(symbol: "arrow.triangle.2.circlepath", title: Strings.Onboarding.syncTitle,
-                    subtitle: Strings.Onboarding.syncDetail)
-            Divider()
-            CardRow(symbol: "arrow.down.circle", title: Strings.Onboarding.updatesTitle,
-                    subtitle: Strings.Onboarding.updatesInfo)
-            Divider()
-            CardRow(symbol: "puzzlepiece.extension", title: Strings.Onboarding.mcpTitle, subtitle: Strings.Onboarding.mcpInfo)
-            Divider()
-            CardRow(symbol: "checkmark.shield", title: Strings.Onboarding.notarizedTitle,
-                    subtitle: Strings.Onboarding.notarizedInfo)
-        }
-    }
-}
-
-/// The two shortcuts to remember, as keys.
-private struct ReadyCard: View {
-    @Default(.activationShortcut) private var activation
-    @Default(.pasteStackShortcut) private var pasteStack
-
-    var body: some View {
-        OnboardingCard {
-            row(activation, title: Strings.Shortcuts.activate, subtitle: Strings.Onboarding.activateInfo)
-            Divider()
-            row(pasteStack, title: Strings.Shortcuts.pasteStack, subtitle: Strings.Onboarding.stackInfo)
-        }
-    }
-
-    private func row(_ shortcut: Shortcut?, title: String, subtitle: String) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            ShortcutKeys(shortcut: shortcut).frame(width: 98, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.sp(.body, .medium))
-                Text(subtitle).font(.sp(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, SPMetrics.Onboarding.rowPadding.width)
-        .padding(.vertical, 14)
     }
 }
