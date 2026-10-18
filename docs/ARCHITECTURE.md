@@ -11,22 +11,24 @@ wording in `docs/specs/strings.md`. Section numbers in code comments point into 
 Sources/
   SuperPasteCore/     contracts & shared utilities (no feature logic): domain model, store and service
                       protocols, SearchQuery, retention mapping, settings keys, design tokens, Services registry,
-                      paths, typed Defaults, Keychain, shortcuts & global hotkeys, alerts/HUD, permissions
+                      paths, typed Defaults, Keychain, shortcuts & global hotkeys, alerts/HUD, permissions, the
+                      shared app menu, the app-icon header colour
   ClipStore/          SQLite store: items, pinboards, FTS5 search, content-addressed blobs, retention, undo,
                       sync journal, damaged-store recovery
   ClipboardKit/       pasteboard monitor and capture filters, classification, link previews, sounds, pasting
                       (direct paste, plain text, multi-item), Paste Stack engine
   StripKit/           the strip panel: toolbar, search field and filter suggestions, tab bar, cards, context menus,
                       preview and editors, New Text Item window, Paste Stack panel, sidecar cards
-  SettingsKit/        Settings window and panes, onboarding, permission screens, open at login
+  SettingsKit/        Settings window and panes, onboarding, permission screens, open at login, MCP client
+                      config snippets (Integrations pane)
   SyncKit/            end-to-end-encrypted folder sync
-  MCPKit/             local MCP server: tools, OAuth (DCR + PKCE) and token clients, client config snippets
+  MCPKit/             local MCP server: tools, OAuth (DCR + PKCE) and token clients, client kinds
   UpdateKit/          background updates from GitHub Releases: check, SHA-256 and code-signature verification,
                       staging next to the app, swap on quit or while idle
   SuperPaste/         app target: launch sequence, module wiring, hidden main menu, menu bar item, global
-                      shortcuts, URL scheme
+                      shortcuts, URL routing
   super-paste-mcp/    stdio ↔ HTTP bridge for MCP clients (Foundation only; ships in Contents/MacOS)
-  SuperPasteSelfTest/ headless checks (`swift run SuperPasteSelfTest`)
+  SuperPasteSelfTest/ headless checks (`swift run SuperPasteSelfTest`), per module and end to end
 ```
 
 ## Rules
@@ -34,11 +36,10 @@ Sources/
 - Feature modules depend **only** on `SuperPasteCore`. They never import each other; they talk through the
   `Services` registry (`Services.store`, `Services.pasting`, …).
 - Each protocol has one owning module. Its `<Module>Module.install()` registers the implementation in `Services`.
-  Until the real one exists, a `Placeholder…` class stands in; **delete it in the change that registers the real
-  implementation**.
-- `SuperPasteCore` is the contract. Workers don't edit it; a needed change (a new method, a new field, a new
-  setting) goes to the orchestrator, who changes Core for everyone. Module-private state (caches, change tokens)
-  is declared in the module itself, with the module as key prefix: `Key<Int>("clipboardKit.changeToken", …)`.
+- `SuperPasteCore` is the contract. A change to it (a new method, a new field, a new setting) updates every
+  implementation and fake in the same change. Code two modules need (the app menu, the app-icon colour, closure
+  menu items) lives in Core once rather than in each module. Module-private state (caches, change tokens) is
+  declared in the module itself, with the module as key prefix: `Key<Int>("clipboardKit.changeToken", …)`.
 - UI code is `@MainActor`; so are all service protocols and the store. Work off the main actor (SQLite on a queue,
   the MCP server's sockets, sync I/O) hops back before calling a service.
 - Everything is local unless a privacy switch allows a network call (link previews, update checks). No telemetry.
@@ -48,13 +49,40 @@ Sources/
 
 `Sources/SuperPaste/main.swift`:
 
-1. `applicationWillFinishLaunching` installs modules in this order: ClipStore → ClipboardKit → SyncKit → MCPKit →
-   UpdateKit → SettingsKit → StripKit, then sets the hidden main menu.
+1. `applicationWillFinishLaunching` installs modules in dependency order: ClipStore (prunes past Keep History now,
+   then hourly) → ClipboardKit → SyncKit (resumes syncing once launched) → MCPKit → UpdateKit → SettingsKit →
+   StripKit, then sets the hidden main menu (File › Close, Edit › Undo/Redo/Cut/Copy/Paste/Select All, Window ›
+   Minimize, Quit) so text fields get their standard key equivalents.
 2. `applicationDidFinishLaunching`: menu bar item, global shortcuts (Activate ⇧⌘V → `Services.strip.toggle()`,
-   Paste Stack ⇧⌘C → `Services.pasting.togglePasteStack()`, re-registered when changed), `Services.clipboard.start()`,
-   `Services.mcp.start()` when `isMCPEnabled`, `Services.onboarding.show()` until completed, `Services.updates.start()`.
-3. Reopening the app shows the strip; `superpaste://` URLs are parsed by `AppRoute` and dispatched to the strip or
-   Settings.
+   Paste Stack ⇧⌘C → `Services.pasting.togglePasteStack()`, re-registered when changed; next/previous pinboard
+   ⌘→/⌘← are strip-local, read live by StripKit), `Services.clipboard.start()`, `Services.mcp.start()` when
+   `isMCPEnabled`, `Services.onboarding.show()` until completed, `Services.updates.start()`.
+3. Reopening the app shows the strip. `superpaste://` URLs are parsed by `AppRoute` and dispatched to the strip,
+   Settings, the Accessibility screen or the login item.
+
+### Menu bar item and app menu
+
+`AppMenu` (Core) builds the app menu fresh each time it opens; the menu bar item and the strip's "…" button both
+show it, and the strip's paused indicator shows its Pause submenu:
+
+```
+Open Super Paste        ⇧⌘V   (the activation shortcut, as set)
+Paste Stack             ⇧⌘C   (ticked while open)
+New Text Item           ⌘N
+─
+Pause ▸                       Pause for 15m / 30m / 1h / 3h / 8h, Until I Resume ⌘T
+                              (titled "Paused until HH:mm" while paused: Resume ⌘T, then the durations)
+─
+Settings…               ⌘,
+Getting Started               (onboarding again)
+About Super Paste             (Settings › About)
+─
+Quit Super Paste        ⌘Q
+```
+
+No Check for Updates: UpdateKit installs updates by itself. The menu bar item (shown while Show in Menu Bar is on)
+toggles the strip on a left click and opens the menu on a right, Control- or Option-click; it is dimmed while
+capturing is paused.
 
 ## Contracts (SuperPasteCore)
 
@@ -62,13 +90,15 @@ Sources/
 |---|---|
 | `Model.swift` | `ClipItem`, `ItemKind`/`ItemTypeFilter`, `BlobRef`, `PasteboardRep`/`PasteboardEntry` (stored payload), `RepData`/`EntryData` (payload with bytes), `AppRecord`, `Device`, `LinkMetadata`, `PixelSize`, `PinboardPin`, `Pinboard`, `PinboardColor`, `ListScope` |
 | `Store.swift` | `ItemStoring`, `SyncStoring`, `ClipDraft`, `InsertResult`, `StoreChange`, `StoreError`, `SyncRecord`, `SyncTombstone`, `JournalEntry` |
-| `Contracts.swift` | `ClipboardMonitoring`, `Pasting`, `StripPresenting`, `SettingsPresenting`, `OnboardingPresenting`, `PermissionsPresenting`, `SyncServicing`, `MCPServing`, `Updating` and their value types |
+| `Contracts.swift` | `ClipboardMonitoring`, `Pasting`, `StripPresenting`, `SettingsPresenting` (with `setOpenAtLogin`), `OnboardingPresenting`, `PermissionsPresenting`, `SyncServicing`, `MCPServing` (`MCPClientInfo` with its `MCPClientKind`), `Updating` and their value types |
 | `Search.swift` | `SearchQuery` (parser, canonical text, `kinds`, `dateRanges`), `DateRange` |
 | `Content.swift` | `PasteboardType` names (self-marker `org.superpaste.item-id`, banned and volatile types), `ClipChecksum`, `TextClassifier`, `Device.current` |
 | `Retention.swift` | `HistoryRetention`: Keep History slider ↔ days |
 | `Settings.swift` | every setting as a `Defaults.Keys` member with its spec default, `CaptureDefaults`, `PauseDurations`, `StackDirection`, the two privacy toggles over `ignoredPasteboardTypes` |
 | `Theme.swift` | `SPStyle` (glass on macOS 26+, classic on 14/15), `SPColor`, `SPFont`, `CardSizeClass`, `SPMetrics`, `SPMotion` |
 | `Routes.swift` | `AppRoute`: `superpaste://` URLs |
+| `AppMenu.swift` | `AppMenu` (the shared app menu and Pause submenu), `ClosureMenuItem`, `NSMenuItem.make` |
+| `AppColor.swift` | `AppColor`: built-in app colours and the header colour derived from an app icon |
 | `Services.swift` | `Services` registry, `SuperPastePaths` |
 | `System.swift` | `Log`, `Alerts`, `HUD` (the OSD toast), `NSScreen.active`, `Permissions` |
 | `Defaults.swift`, `Keychain.swift`, `Hotkeys.swift` | typed UserDefaults, generic passwords, `Shortcut` + `HotkeyCenter` + `ShortcutRecorder` |
@@ -83,36 +113,40 @@ Sources/
   Erase History.
 - Dedupe: captures with an equal `ClipChecksum` reuse the existing item and move it to the front.
 - Sync is record-level last-writer-wins on `updatedAt`, with tombstones; the store journals local writes
-  (`SyncStoring`), SyncKit ships records and blobs.
+  (`SyncStoring`), SyncKit ships records and blobs. Equal `updatedAt`s go to the item's greater device id, then the
+  greater digest of the record, so every Mac picks the same version; a deletion wins a tie with an edit.
 - Search: `SearchQuery` syntax and matching rules are documented on the type; the store implements matching with
   FTS5 (tokens) and SQL (filters).
 
-## Ownership map (parallel work)
+## Module ownership
 
-Each worker owns only the files listed for it. Anything else, including `Package.swift`, is a request to the
-orchestrator.
+Each module owns its folder and its `Sources/SuperPasteSelfTest/<Module>Tests.swift`. Core, the app target, the
+end-to-end test, resources, scripts and docs are shared.
 
-| Owner | Files | Implements | Spec |
+| Module | Files | Implements | Spec |
 |---|---|---|---|
-| Orchestrator | `Package.swift`, `Sources/SuperPasteCore/**`, `Sources/SuperPaste/**`, `Sources/SuperPasteSelfTest/main.swift`, `Sources/SuperPasteSelfTest/CoreTests.swift`, `Resources/**`, `scripts/**`, `docs/**`, `README.md`, `CHANGELOG.md` | contracts, app shell (menu bar item and app menu, Pause menu, URL routes, launch) | §1, §6, §15 |
-| ClipStore | `Sources/ClipStore/**`, `Sources/SuperPasteSelfTest/ClipStoreTests.swift` | `ItemStoring`, `SyncStoring` | §2.6, §2.9, §4.7 engine, §4.10, §5 data, §21 |
-| ClipboardKit | `Sources/ClipboardKit/**`, `Sources/SuperPasteSelfTest/ClipboardKitTests.swift` | `ClipboardMonitoring`, `Pasting` | §2, §3 |
-| StripKit | `Sources/StripKit/**`, `Sources/SuperPasteSelfTest/StripKitTests.swift` | `StripPresenting` | §4, §5 UI, §3.6 panel, §11 |
-| SettingsKit | `Sources/SettingsKit/**`, `Sources/SuperPasteSelfTest/SettingsKitTests.swift` | `SettingsPresenting`, `OnboardingPresenting`, `PermissionsPresenting` | §7, §8, §9 |
-| SyncKit | `Sources/SyncKit/**`, `Sources/SuperPasteSelfTest/SyncKitTests.swift` | `SyncServicing` | §17 (replacement) |
-| MCPKit | `Sources/MCPKit/**`, `Sources/super-paste-mcp/**`, `Sources/SuperPasteSelfTest/MCPKitTests.swift` | `MCPServing`, the stdio bridge | §14 |
-| UpdateKit | `Sources/UpdateKit/**`, `Sources/SuperPasteSelfTest/UpdateKitTests.swift` | `Updating` (complete) | — |
+| Core and app shell | `Package.swift`, `Sources/SuperPasteCore/**`, `Sources/SuperPaste/**`, `Sources/SuperPasteSelfTest/{main,CoreTests,EndToEndTests}.swift`, `Resources/**`, `scripts/**`, `docs/**` | contracts, menu bar item and app menu, Pause menu, URL routes, launch | §1, §6, §15 |
+| ClipStore | `Sources/ClipStore/**` | `ItemStoring`, `SyncStoring` | §2.6, §2.9, §4.7 engine, §4.10, §5 data, §21 |
+| ClipboardKit | `Sources/ClipboardKit/**` | `ClipboardMonitoring`, `Pasting` | §2, §3 |
+| StripKit | `Sources/StripKit/**` | `StripPresenting` | §4, §5 UI, §3.6 panel, §11 |
+| SettingsKit | `Sources/SettingsKit/**` | `SettingsPresenting`, `OnboardingPresenting`, `PermissionsPresenting`, MCP config snippets | §7, §8, §9, §14.4 |
+| SyncKit | `Sources/SyncKit/**` | `SyncServicing` | §17 (replacement) |
+| MCPKit | `Sources/MCPKit/**`, `Sources/super-paste-mcp/**` | `MCPServing`, client kinds, the stdio bridge | §14 |
+| UpdateKit | `Sources/UpdateKit/**` | `Updating` | — |
 
-Module resources (sounds, images) are declared in `Package.swift` by the orchestrator on request;
-`scripts/build-app.sh` copies every `SuperPaste_*.bundle` into `Contents/Resources`. Load them from
-`Bundle.main.resourceURL` (falling back to the executable's folder for `swift run`), never `Bundle.module`.
+Module resources (sounds, images) are declared in `Package.swift`; `scripts/build-app.sh` copies every
+`SuperPaste_*.bundle` into `Contents/Resources`. Load them from `Bundle.main.resourceURL` (falling back to the
+executable's folder for `swift run`), never `Bundle.module`.
 
 ## Tests
 
 The Command Line Tools ship no XCTest. `SuperPasteSelfTest` is an executable with a `check(_:_:)` harness: each
 module appends cases to `SelfTest.cases` from `register<Module>Tests()` in its own file. Files and settings go to a
-throwaway folder and defaults suite, never the real ones. `UpdateKit.endToEnd` runs against `build/Super Paste.app`
-when it exists (build it first with `scripts/build-app.sh`).
+throwaway folder and defaults suite, never the real ones; pasteboards are private named ones, never the general
+pasteboard, and no key event is posted. `EndToEnd.copyToMCP` runs the real modules together: copies on a private
+pasteboard are captured, searched, pasted back to another private pasteboard, pinned, pruned, synced to a second
+store through a folder and listed by an MCP client over loopback. `UpdateKit.endToEnd` runs against
+`build/Super Paste.app` when it exists (build it first with `scripts/build-app.sh`).
 
 ```
 swift build                       # warning-free
