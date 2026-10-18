@@ -19,6 +19,7 @@ func registerStripKitTests() {
     SelfTest.cases.append(("StripKit.headerColor", { MainActor.assumeIsolated { stripHeaderColor() } }))
     SelfTest.cases.append(("StripKit.presentation", { stripPresentation() }))
     SelfTest.cases.append(("StripKit.suggestions", { stripSuggestions() }))
+    SelfTest.cases.append(("StripKit.hotCorner", { stripHotCorner() }))
     SelfTest.cases.append(("StripKit.controller", { MainActor.assumeIsolated { stripController() } }))
     SelfTest.cases.append(("StripKit.render", { MainActor.assumeIsolated { stripRender() } }))
 }
@@ -283,6 +284,64 @@ private func stripSuggestions() {
     check(sources.sections.map(\.type) == [.app, .date, .device, .pinboard, .type], "browser section order")
     check(sources.title(for: .init(.type, "links")) == "Link" && sources.title(for: .init(.date, "Today")) == "Today",
           "token titles")
+}
+
+// MARK: - Hot corner (pure geometry and timing)
+
+private func stripHotCorner() {
+    let main = NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let right = NSRect(x: 1440, y: -300, width: 1920, height: 1080)  // to the right, hanging 300 pt lower
+    let screens = [main, right]
+    func corner(_ c: HotCorner, _ x: CGFloat, _ y: CGFloat, _ s: [NSRect] = screens) -> NSRect? {
+        HotCornerDetector.screen(withCorner: c, at: NSPoint(x: x, y: y), screens: s)
+    }
+    check(corner(.bottomLeft, 0, 0) == main && corner(.bottomLeft, 1.5, 2) == main, "bottom-left within 2 pt")
+    check(corner(.bottomLeft, 3, 0) == nil && corner(.bottomLeft, 0, 2.5) == nil, "further away isn't the corner")
+    check(corner(.topLeft, 0, 899.5) == main && corner(.topLeft, 1, 900) == main, "top-left")
+    check(corner(.bottomRight, 1439.5, 0) == nil, "the main screen's bottom-right is where the second screen begins")
+    check(corner(.bottomRight, 1439.5, 0, [main]) == main, "alone, it is a corner")
+    check(corner(.bottomLeft, 1440.5, -300) == right, "the second screen's bottom-left hangs below the first one: a corner")
+    check(corner(.topRight, 3359, 779) == right && corner(.topLeft, 1441, 779) == nil,
+          "the second screen's top-right is a corner; its top-left continues onto the first screen")
+    check(corner(.topRight, 1439.5, 899.5) == main, "the first screen's top-right is above the second screen: a corner")
+    check(corner(.off, 0, 0) == nil, "off never matches")
+    check(corner(.bottomLeft, -5, 0) == nil, "off screen")
+
+    var detector = HotCornerDetector(corner: .bottomLeft)
+    let t0 = Date(timeIntervalSince1970: 1_000)
+    check(detector.update(point: NSPoint(x: 400, y: 300), screens: screens, now: t0) == .none, "elsewhere: nothing")
+    check(detector.update(point: NSPoint(x: 1, y: 1), screens: screens, now: t0) == .entered, "reaching the corner")
+    check(detector.update(point: NSPoint(x: 0, y: 0), screens: screens, now: t0.addingTimeInterval(0.1)) == .none,
+          "still too early")
+    check(detector.update(point: NSPoint(x: 0, y: 0), screens: screens, now: t0.addingTimeInterval(0.15)) == .rested(screen: main),
+          "rested after the dwell")
+    check(detector.update(point: NSPoint(x: 0, y: 0), screens: screens, now: t0.addingTimeInterval(1)) == .none, "rested once")
+    check(detector.update(point: NSPoint(x: 10, y: 10), screens: screens, now: t0.addingTimeInterval(1.1)) == .left, "leaving")
+    check(detector.update(point: NSPoint(x: 10, y: 10), screens: screens, now: t0.addingTimeInterval(1.2)) == .none, "and gone")
+    check(detector.update(point: NSPoint(x: 0, y: 0), screens: screens, now: t0.addingTimeInterval(2)) == .entered
+          && detector.update(point: NSPoint(x: 0, y: 0), screens: screens, now: t0.addingTimeInterval(2.1), dragging: true) == .left,
+          "a drag through the corner doesn't count")
+    check(detector.update(point: NSPoint(x: 0, y: 0), screens: screens, now: t0.addingTimeInterval(3)) == .entered
+          && detector.update(point: NSPoint(x: 1, y: 0), screens: screens, now: t0.addingTimeInterval(3.05)) == .none
+          && detector.update(point: NSPoint(x: 0, y: 1), screens: screens, now: t0.addingTimeInterval(3.2)) == .rested(screen: main),
+          "small moves inside the zone keep the dwell going")
+    detector.reset()
+    check(detector.insideSince == nil && !detector.rested, "reset forgets")
+
+    let peek = PeekLayout.frame(for: .bottomLeft, on: main)
+    check(peek == NSRect(x: 8, y: 8, width: 220, height: 70), "the peek sits 8 in from the bottom-left corner")
+    check(PeekLayout.frame(for: .topRight, on: main) == NSRect(x: 1440 - 8 - 220, y: 900 - 8 - 70, width: 220, height: 70), "top-right")
+    check(PeekLayout.hiddenFrame(for: .bottomLeft, on: main).maxX == 0 && PeekLayout.hiddenFrame(for: .bottomRight, on: main).minX == 1440,
+          "it slides in from the side edge")
+    let windows: [[String: Any]] = [
+        [kCGWindowOwnerPID as String: pid_t(7), kCGWindowLayer as String: 0,
+         kCGWindowBounds as String: ["X": CGFloat(0), "Y": CGFloat(0), "Width": CGFloat(1440), "Height": CGFloat(900)]],
+        [kCGWindowOwnerPID as String: pid_t(8), kCGWindowLayer as String: 0,
+         kCGWindowBounds as String: ["X": CGFloat(0), "Y": CGFloat(0), "Width": CGFloat(800), "Height": CGFloat(600)]],
+    ]
+    check(FullScreenCheck.isFullScreen(windows: windows, pid: 7, screenSizes: [main.size]), "a screen-sized window: full screen")
+    check(!FullScreenCheck.isFullScreen(windows: windows, pid: 8, screenSizes: [main.size]), "a smaller window isn't")
+    check(!FullScreenCheck.isFullScreen(windows: windows, pid: 9, screenSizes: [main.size]), "no window at all")
 }
 
 // MARK: - The strip against an in-memory store
@@ -615,6 +674,18 @@ private func stripSuggestions() {
             _ = write(content, "new-text-item-\(mode)")
         }
         creator.close()
+    }
+
+    // The hot-corner peek: three latest cards and the shortcut.
+    for (mode, appearance) in appearances {
+        let peek = PeekView(style: .glass)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: PeekLayout.size), styleMask: .borderless, backing: .buffered,
+                              defer: false)
+        window.appearance = NSAppearance(named: appearance)
+        window.contentView = peek
+        peek.load(store, style: .glass)
+        peek.layoutSubtreeIfNeeded()
+        _ = write(peek, "peek-\(mode)", wallpaper: true, dark: mode == "dark")
     }
 
     // Paste Stack panel.

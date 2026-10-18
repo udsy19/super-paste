@@ -10,6 +10,7 @@ func registerCoreTests() {
     SelfTest.cases.append(("Core.dateRanges", { coreDateRanges() }))
     SelfTest.cases.append(("Core.retentionSlider", { coreRetention() }))
     SelfTest.cases.append(("Core.retentionMigration", { coreRetentionMigration() }))
+    SelfTest.cases.append(("Core.hotCornerPolicy", { coreHotCornerPolicy() }))
     SelfTest.cases.append(("Core.themeMetrics", { coreThemeMetrics() }))
     SelfTest.cases.append(("Core.contentRules", { coreContentRules() }))
     SelfTest.cases.append(("Core.routes", { coreRoutes() }))
@@ -95,6 +96,7 @@ private func coreSettingsDefaults() {
     check(Defaults[.isDirectPasteEnabled] && !Defaults[.isPasteAsPlainTextEnabled], "paste to active app, rich text")
     check(Defaults[.historyRetentionDays] == HistoryRetention.forever && !Defaults[.historyRetentionUserSet]
           && !Defaults[.isDirectPastePromptSuppressed], "Keep History forever, untouched; direct-paste prompt")
+    check(Defaults[.hotCorner] == .bottomLeft, "the hot corner is the bottom-left one")
     let apps = Defaults[.ignoredBundleIdentifiers]
     check(apps.count == 14 && apps.first == "com.apple.Passwords" && apps.last == ".nordpass", "14 password managers, in order")
     let types = Defaults[.ignoredPasteboardTypes]
@@ -219,6 +221,20 @@ private func coreRetentionMigration() {
     Defaults[.historyRetentionUserSet] = false
     Defaults[.historyRetentionDays] = 7
     check(!HistoryRetention.migrateLegacyDefault() && Defaults[.historyRetentionDays] == 7, "other values aren't touched")
+}
+
+/// The hot corner steps aside when macOS's own Hot Corners use the same corner.
+private func coreHotCornerPolicy() {
+    check(!HotCornerPolicy.systemUsesCorner(nil) && !HotCornerPolicy.systemUsesCorner(0) && !HotCornerPolicy.systemUsesCorner(1),
+          "unset, 0 and 1 mean no macOS action")
+    check(HotCornerPolicy.systemUsesCorner(2) && HotCornerPolicy.systemUsesCorner(14), "any other value is an action")
+    check(HotCornerPolicy.effective(.bottomLeft) { _ in nil } == .bottomLeft, "free corner: watched")
+    check(HotCornerPolicy.effective(.bottomLeft) { $0 == .bottomLeft ? 5 : nil } == .off, "a corner macOS uses: off")
+    check(HotCornerPolicy.effective(.topRight) { $0 == .bottomLeft ? 5 : nil } == .topRight, "another corner is fine")
+    check(HotCornerPolicy.effective(.off) { _ in 5 } == .off, "off stays off")
+    check(HotCorner.off.dockDefaultsKey == nil && HotCorner.bottomLeft.dockDefaultsKey == "wvous-bl-corner"
+          && HotCorner.topRight.dockDefaultsKey == "wvous-tr-corner", "Dock keys")
+    check(HotCorner.allCases.map(\.rawValue) == ["off", "bottomLeft", "bottomRight", "topLeft", "topRight"], "stored names")
 }
 
 private func coreRetention() {

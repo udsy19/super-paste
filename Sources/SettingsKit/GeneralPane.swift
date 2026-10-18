@@ -3,7 +3,7 @@ import SwiftUI
 import SuperPasteCore
 
 /// General (behaviour.md §7.1): login item, menu bar icon, sounds, where pasting goes, plain text, Keep History,
-/// Erase History, strip height.
+/// Erase History, the hot corner, strip height.
 struct GeneralPane: View {
     @ObservedObject var accessibility: PermissionMonitor
     @Default(.openAtLogin) private var openAtLogin
@@ -12,6 +12,7 @@ struct GeneralPane: View {
     @Default(.isDirectPasteEnabled) private var directPaste
     @Default(.isPasteAsPlainTextEnabled) private var plainText
     @Default(.stripHeight) private var stripHeight
+    @Default(.hotCorner) private var hotCorner
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -41,6 +42,24 @@ struct GeneralPane: View {
                 }
             }
             SettingsGroup {
+                SettingsRow(title: Strings.General.hotCorner, subtitle: Strings.General.hotCornerInfo) {
+                    Picker("", selection: $hotCorner) {
+                        ForEach(HotCorner.allCases, id: \.self) { corner in Text(corner.title).tag(corner) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                if HotCornerPolicy.systemUsesCorner(HotCornerPolicy.systemAction(for: hotCorner)) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(nsColor: .systemOrange))
+                        Text(Strings.General.hotCornerTaken).font(.sp(.callout)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Divider()
                 SettingsRow(title: Strings.General.stripHeight, subtitle: Strings.General.stripHeightInfo) {
                     Slider(value: Binding(get: { stripHeight },
                                           set: { stripHeight = Double(SPMetrics.Strip.clampedHeight(CGFloat($0))) }),

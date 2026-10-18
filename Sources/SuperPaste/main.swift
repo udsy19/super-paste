@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Defaults[.isMCPEnabled] { Services.mcp.start() }
         if !Services.onboarding.isCompleted { Services.onboarding.show() }
         Services.updates.start()
+        StripKitModule.startHotCorner()
     }
 
     /// Opening the app again (Finder, Spotlight, the Dock while installing) shows the strip (behaviour.md §1.4).

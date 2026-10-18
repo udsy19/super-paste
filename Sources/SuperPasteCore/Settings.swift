@@ -10,6 +10,52 @@ public enum StackDirection: String, Codable, CaseIterable, Sendable {
     case top, bottom
 }
 
+/// A screen corner the pointer can rest in to bring up the peek, or none.
+public enum HotCorner: String, Codable, CaseIterable, Sendable {
+    case off, bottomLeft, bottomRight, topLeft, topRight
+
+    /// The `com.apple.dock` key macOS stores its own Hot Corner action under for this corner; nil for `.off`.
+    public var dockDefaultsKey: String? {
+        switch self {
+        case .off: nil
+        case .bottomLeft: "wvous-bl-corner"
+        case .bottomRight: "wvous-br-corner"
+        case .topLeft: "wvous-tl-corner"
+        case .topRight: "wvous-tr-corner"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .off: "Off"
+        case .bottomLeft: "Bottom-left corner"
+        case .bottomRight: "Bottom-right corner"
+        case .topLeft: "Top-left corner"
+        case .topRight: "Top-right corner"
+        }
+    }
+}
+
+/// Keeps Super Paste's hot corner off a corner macOS already uses, so one gesture never does two things.
+public enum HotCornerPolicy {
+    /// Whether a `wvous-*-corner` value means macOS runs an action there (0 and 1 are "no action").
+    public static func systemUsesCorner(_ dockValue: Int?) -> Bool {
+        guard let dockValue else { return false }
+        return dockValue > 1
+    }
+
+    /// The corner to watch: the chosen one, or `.off` when macOS's Hot Corners already use it.
+    public static func effective(_ chosen: HotCorner, systemAction: (HotCorner) -> Int?) -> HotCorner {
+        systemUsesCorner(systemAction(chosen)) ? .off : chosen
+    }
+
+    /// macOS's Hot Corner setting for a corner, from the Dock's preferences (nil when unset).
+    public static func systemAction(for corner: HotCorner) -> Int? {
+        guard let key = corner.dockDefaultsKey, let dock = UserDefaults(suiteName: "com.apple.dock") else { return nil }
+        return dock.object(forKey: key) as? Int
+    }
+}
+
 /// The default capture filters (behaviour.md §2.3).
 public enum CaptureDefaults {
     /// Password managers. An entry matches a bundle id exactly or as a dotted prefix ("com.1password" matches
@@ -56,6 +102,9 @@ public extension Defaults.Keys {
     /// Whether the user ever moved the Keep History slider. While false, the stored value is a default and may be
     /// migrated.
     static let historyRetentionUserSet = Key<Bool>("historyRetentionUserSet", default: false)
+    /// The screen corner that shows the peek (`HotCorner`); `.off` to disable. The corner is skipped while macOS's
+    /// own Hot Corners use it (`HotCornerPolicy`).
+    static let hotCorner = Key<HotCorner>("hotCorner", default: .bottomLeft)
     /// "Do not ask again" on the direct-paste prompt (paste goes to the clipboard without asking).
     static let isDirectPastePromptSuppressed = Key<Bool>("isDirectPastePromptSuppressed", default: false)
 

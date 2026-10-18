@@ -356,6 +356,12 @@ public struct SPMetrics: Sendable {
         public static let windowLevel = NSWindow.Level(rawValue: 1000)
     }
 
+    /// The hot-corner peek (behaviour notes: hot corner).
+    public enum Peek {
+        public static let cornerRadius: CGFloat = 16
+        public static let cardCornerRadius: CGFloat = 8
+    }
+
     public enum PasteStack {
         public static let windowSize = NSSize(width: 322, height: 372)
         /// `NSStatusWindowLevel`.
@@ -424,6 +430,9 @@ public enum SPMotion {
     public static var stripHideTiming: CAMediaTimingFunction { CAMediaTimingFunction(name: .easeInEaseOut) }
     /// After the strip closes, its closed-state reset (search, scroll) runs this much later.
     public static let closedStateResetDelay: TimeInterval = 10
+    /// The hot-corner peek slides out of its corner and back (a fade with Reduce Motion).
+    public static let peekShowDuration: TimeInterval = 0.18
+    public static let peekHideDuration: TimeInterval = 0.15
 
     /// Scroll-to-selection lasts the time since the previous move, capped here, and is instant below the minimum.
     public static let scrollToSelectionMax: TimeInterval = 0.25
