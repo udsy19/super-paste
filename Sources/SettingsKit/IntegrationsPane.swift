@@ -163,7 +163,9 @@ private struct ClientRow: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 1) {
                 Text(client.name).font(.sp(.body)).lineLimit(1)
-                Text(client.lastUsedAt.map { Strings.Integrations.lastUsed(relativeDate($0)) } ?? Strings.Integrations.neverUsed)
+                Text(Strings.Integrations.clientDetail(kind: client.kind.displayName, lastUsed: client.lastUsedAt.map {
+                    Strings.Integrations.lastUsed(relativeDate($0))
+                } ?? Strings.Integrations.neverUsed))
                     .font(.sp(.callout)).foregroundStyle(.secondary)
             }
             Spacer()

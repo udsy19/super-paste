@@ -12,6 +12,8 @@ func registerCoreTests() {
     SelfTest.cases.append(("Core.themeMetrics", { coreThemeMetrics() }))
     SelfTest.cases.append(("Core.contentRules", { coreContentRules() }))
     SelfTest.cases.append(("Core.routes", { coreRoutes() }))
+    SelfTest.cases.append(("Core.appColor", { MainActor.assumeIsolated { coreAppColor() } }))
+    SelfTest.cases.append(("Core.appMenu", { MainActor.assumeIsolated { coreAppMenu() } }))
 }
 
 private func roundTrip<T: Codable & Equatable>(_ value: T) -> Bool {
@@ -53,6 +55,9 @@ private func coreModelCodable() {
     check(roundTrip(JournalEntry(sequence: 42, record: tombstone)), "journal entry")
     check(roundTrip(SearchQuery(parsing: "meeting app:Mail")), "SearchQuery")
     check(roundTrip(MCPClientInfo(name: "Editor", connection: .token)), "MCP client")
+    check(roundTrip(MCPClientInfo(name: "command-line assistant", kind: .cliAssistant, connection: .oauth, lastUsedAt: Date())), "MCP client kind")
+    let legacy = Data(#"{"id":"\#(UUID().uuidString)","name":"Old","connection":"token","createdAt":0}"#.utf8)
+    check((try? JSONDecoder().decode(MCPClientInfo.self, from: legacy))?.kind == .custom, "a client saved without a kind reads as custom")
     for scope in [ListScope.history, .all, .pinboard(pinboardID)] {
         check(ListScope(id: scope.id) == scope && roundTrip(scope), "ListScope \(scope.id)")
     }
@@ -279,6 +284,104 @@ private func coreRoutes() {
     check(route("superpaste://preview-item/\(id.uuidString)") == .strip(.preview(id)), "preview")
     check(route("superpaste://edit-item/\(id.uuidString)") == .strip(.edit(id)), "edit")
     check(route("superpaste://settings") == .settings(nil) && route("superpaste://settings/privacy") == .settings(.privacy), "settings")
+    check(route("superpaste://about") == .settings(.about) && route("superpaste://enable-sync") == .settings(.sync), "about, sync")
+    check(route("superpaste://enable-direct-paste") == .enableDirectPaste, "enable direct paste")
+    check(route("superpaste://enable-open-at-login") == .enableOpenAtLogin
+          && route("superpaste://enable-run-in-background") == .enableOpenAtLogin, "enable open at login")
     check(route("superpaste://settings/bogus") == nil && route("superpaste://bogus") == nil && route("https://example.com") == nil
           && route("superpaste://preview-item/nope") == nil && route("superpaste://list") == nil, "rejected")
+}
+
+/// The header colour rule shared by ClipboardKit (at capture) and StripKit (for records without one).
+@MainActor private func coreAppColor() {
+    check(AppColor.known("com.apple.Safari") == "#62A9F5" && AppColor.known("COM.APPLE.FINDER") == "#62A9F5", "known apps")
+    check(AppColor.known("com.adobe.Photoshop") == "#005C90" && AppColor.known("com.apple.Terminal") == "#454D4D", "table entries")
+    check(AppColor.known("com.example.unknown") == nil, "unknown apps have no built-in colour")
+
+    func pixels(_ list: [(UInt8, UInt8, UInt8, UInt8, Int)]) -> [UInt8] {
+        list.flatMap { r, g, b, a, n in Array(repeating: [r, g, b, a], count: n).flatMap { $0 } }
+    }
+    // Pure red: saturation capped at 0.85, brightness clamped to 0.96.
+    check(AppColor.derive(rgba: pixels([(255, 0, 0, 255, 10), (128, 128, 128, 255, 50)])) == "#F52525",
+          "most frequent saturated colour, gray ignored")
+    check(AppColor.derive(rgba: pixels([(0, 0, 100, 255, 5), (255, 0, 0, 128, 50)])) == "#0F0F64",
+          "dark colours keep their brightness; translucent pixels don't count")
+    check(AppColor.derive(rgba: pixels([(130, 40, 40, 255, 10)])) == "#BF3B3B", "brightness over 0.4 rises to at least 0.75")
+    check(AppColor.derive(rgba: pixels([(200, 140, 140, 255, 3)])) == "#C88C8C", "saturation 0.3, brightness in range: unchanged")
+    check(AppColor.derive(rgba: pixels([(200, 150, 150, 255, 3)])) == nil, "saturation 0.25 is not above 0.25")
+    check(AppColor.derive(rgba: pixels([(128, 128, 128, 255, 9), (255, 255, 255, 255, 9)])) == nil, "all gray: nil")
+    check(AppColor.derive(rgba: []) == nil, "no pixels: nil")
+    check(AppColor.derive(rgba: pixels([(0, 0, 255, 255, 2), (255, 0, 0, 255, 2)])) ==
+          AppColor.derive(rgba: pixels([(255, 0, 0, 255, 2), (0, 0, 255, 255, 2)])), "ties don't depend on order")
+
+    // A real image goes through the same rule.
+    let icon = NSImage(size: NSSize(width: 64, height: 64), flipped: false) { rect in
+        NSColor(srgbRed: 0.1, green: 0.4, blue: 0.9, alpha: 1).setFill()
+        rect.fill()
+        return true
+    }
+    let blue = AppColor.derive(from: icon).map { NSColor(hex: $0) }
+    var hue: CGFloat = 0
+    blue?.getHue(&hue, saturation: nil, brightness: nil, alpha: nil)
+    check(blue != nil && abs(hue - 0.6) < 0.03, "image → blue (\(blue?.hexString ?? "nil"))")
+    check(NSColor(srgbRed: 1, green: 0.5, blue: 0, alpha: 1).hexString == "#FF8000" && NSColor(hex: "#62A9F5").hexString == "#62A9F5",
+          "hexString")
+}
+
+/// The app menu shared by the menu bar item and the strip's "…" button (behaviour.md §6.2, §6.3).
+@MainActor private func coreAppMenu() {
+    let saved = Services.clipboard
+    defer { Services.clipboard = saved; Defaults.reset(.activationShortcut) }
+    func titles(_ menu: NSMenu) -> [String] { menu.items.map { $0.isSeparatorItem ? "—" : $0.title } }
+    func choose(_ menu: NSMenu, _ index: Int) {
+        let item = menu.items[index]
+        if let action = item.action { _ = (item.target as AnyObject?)?.perform(action, with: item) }
+    }
+
+    let running = StripFakeClipboard(state: .running)
+    Services.clipboard = running
+    let menu = AppMenu.make()
+    check(titles(menu) == ["Open Super Paste", "Paste Stack", "New Text Item", "—", "Pause", "—", "Settings…", "Getting Started",
+                           "About Super Paste", "—", "Quit Super Paste"], "items and order: \(titles(menu))")
+    check(!titles(menu).contains { $0.localizedCaseInsensitiveContains("update") }, "no update item: updates are automatic")
+    func key(_ title: String) -> String? {
+        menu.items.first { $0.title == title }.map { item in
+            Shortcut(keyEquivalent: item.keyEquivalent, modifiers: item.keyEquivalentModifierMask)?.displayString ?? ""
+        }
+    }
+    check(key("Open Super Paste") == "⇧⌘V" && key("Paste Stack") == "⇧⌘C" && key("New Text Item") == "⌘N"
+          && key("Settings…") == "⌘," && key("Quit Super Paste") == "⌘Q" && key("Getting Started") == "", "shortcuts")
+    Defaults[.activationShortcut] = Shortcut(key: kVK_ANSI_B, modifiers: [.option, .command])
+    check(AppMenu.make().items.first?.keyEquivalent == "b", "the activation shortcut is read when the menu is built")
+    Defaults[.activationShortcut] = nil
+    check(AppMenu.make().items.first?.keyEquivalent == "", "a removed shortcut shows none")
+
+    let pause = AppMenu.makePauseMenu()
+    check(titles(pause) == ["Pause for 15m", "Pause for 30m", "Pause for 1h", "Pause for 3h", "Pause for 8h", "—", "Until I Resume"],
+          "pause menu while capturing: \(titles(pause))")
+    check(pause.items.last?.keyEquivalent == "t", "Until I Resume is ⌘T")
+    let before = Date()
+    choose(pause, 2)
+    choose(pause, 6)
+    check(running.pauses.count == 2 && running.pauses.last == .some(nil), "until resumed: no end date")
+    check(running.pauses.first.flatMap { $0 }.map { abs($0.timeIntervalSince(before) - 3600) < 5 } ?? false,
+          "Pause for 1h ends in an hour")
+
+    let until = Calendar.current.date(bySettingHour: 14, minute: 30, second: 0, of: Date())!
+    let paused = StripFakeClipboard(state: .paused(until: until))
+    Services.clipboard = paused
+    let status = "Paused until \(until.formatted(date: .omitted, time: .shortened))"
+    check(AppMenu.pauseStatus == status && AppMenu.make().items[4].title == status, "the Pause item shows when it ends")
+    let resume = AppMenu.makePauseMenu()
+    check(titles(resume).prefix(3) == [status, "Resume", "—"] && resume.items[0].isEnabled == false
+          && resume.items[1].keyEquivalent == "t" && resume.items.count == 8, "while paused: status, Resume ⌘T, the durations")
+    choose(resume, 1)
+    check(paused.resumes == 1, "Resume resumes")
+    Services.clipboard = StripFakeClipboard(state: .paused(until: nil))
+    check(AppMenu.pauseStatus == "Paused", "paused until resumed")
+
+    check(!AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: []), "left click toggles the strip")
+    check(AppMenu.opensFromStatusItem(.rightMouseUp, modifiers: []) && AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: .control)
+          && AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: .option), "right, Control- and Option-click open the menu")
+    check(!AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: .command), "Command-click doesn't")
 }

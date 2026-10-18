@@ -26,6 +26,13 @@ public extension NSColor {
         self.init(srgbRed: CGFloat((rgba >> 24) & 0xFF) / 255, green: CGFloat((rgba >> 16) & 0xFF) / 255,
                   blue: CGFloat((rgba >> 8) & 0xFF) / 255, alpha: CGFloat(rgba & 0xFF) / 255)
     }
+
+    /// "#RRGGBB" in sRGB (alpha dropped).
+    var hexString: String {
+        let c = usingColorSpace(.sRGB) ?? self
+        func byte(_ v: CGFloat) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", byte(c.redComponent), byte(c.greenComponent), byte(c.blueComponent))
+    }
 }
 
 /// Named colours. Light/dark pairs resolve per appearance (dark for any dark or high-contrast-dark appearance).

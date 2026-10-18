@@ -503,7 +503,12 @@ private func mcpServer() {
     let accessToken = issued?.json?["access_token"]?.string ?? ""
     checkNow(issued?.status == 200 && issued?.json?["token_type"] == "Bearer" && accessToken.hasPrefix("spm_")
              && issued?.headers["cache-control"] == "no-store", "token issued")
-    checkNow(server.clients.contains { $0.name == "Desk <Assistant>" && $0.connection == .oauth }, "OAuth client listed")
+    checkNow(server.clients.contains { $0.name == "Desk <Assistant>" && $0.connection == .oauth && $0.kind == .custom },
+             "OAuth client listed")
+    let kinds: [(String, MCPClientKind)] = [("command-line assistant", .cliAssistant), ("cli-assistant (CLI)", .cliAssistant), ("Assistant", .desktopAssistant),
+                                            ("Codex CLI", .codex), ("Cursor", .cursor), ("Visual Studio Code", .vscode),
+                                            ("VS Code Insiders", .vscode), ("Windsurf", .windsurf), ("My Tool", .custom)]
+    checkNow(kinds.allSatisfy { MCPClientKind(clientName: $0.0) == $0.1 }, "client kinds from the registered name")
     checkNow(rpc(initialize, token: accessToken)?.status == 200, "the OAuth token works")
     let revoked = send("POST", "/revoke", headers: [("Content-Type", "application/x-www-form-urlencoded")],
                        body: Data("token=\(accessToken)&token_type_hint=access_token".utf8))

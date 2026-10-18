@@ -35,7 +35,7 @@ public enum CaptureDefaults {
     ]
 }
 
-/// Pause choices in the Pause menu, in seconds (behaviour.md §6.3); "Pause Super Paste" pauses until resumed.
+/// Pause choices in the Pause menu, in seconds (behaviour.md §6.3); "Until I Resume" pauses without an end.
 public enum PauseDurations {
     public static let all: [TimeInterval] = [900, 1800, 3600, 10800, 28800]
 }
@@ -116,8 +116,6 @@ public extension Defaults.Keys {
     // MARK: App state
 
     static let isOnboardingCompleted = Key<Bool>("isOnboardingCompleted", default: false)
-    static let lastLaunchedVersion = Key<String>("lastLaunchedVersion", default: "")
-    static let isDiagnosticsEnabled = Key<Bool>("isDiagnosticsEnabled", default: false)
     /// Ids of confirmations the user ticked "Don't ask again" on (`Alerts.confirm`).
     static let suppressedWarnings = Key<Set<String>>("suppressedWarnings", default: [])
 }

@@ -124,19 +124,8 @@ enum L10n {
     static let pasteStack = "Paste Stack"
     static let empty = "Empty"
 
-    // Notification bar, pause (§6.3)
-    static let paused = "Paused"
-    static func pausedUntil(_ time: String) -> String { "Paused until \(time)" }
-    static let resume = "Resume"
-    static let pause = "Pause"
-    static let pauseSuperPaste = "Pause Super Paste"
-    static func pauseFor(_ duration: String) -> String { "Pause for \(duration)" }
+    // Notification bar (§6.3)
     static let syncing = "Syncing"
-
-    // Overflow menu (§6.2)
-    static let about = "About Super Paste"
-    static let settings = "Settings…"
-    static let quit = "Quit Super Paste"
 
     // Sidecar notifications (behaviour §11)
     static let enableDirectPasteTitle = "Enable Direct Paste"

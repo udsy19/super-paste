@@ -57,6 +57,8 @@ final class SettingsWindowController: NSObject, SettingsPresenting, NSWindowDele
         window.makeKeyAndOrderFront(nil)
     }
 
+    func setOpenAtLogin(_ enabled: Bool) { LoginItem.set(enabled) }
+
     /// Builds the window without showing it. The snapshot renderer gets a borderless window and a plain split item
     /// for the sidebar: scroll views under a transparent title bar and the system sidebar material don't draw off
     /// screen.

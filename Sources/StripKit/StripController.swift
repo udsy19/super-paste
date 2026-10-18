@@ -334,9 +334,9 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
         var items: [ToolbarButton] = []
         if Services.clipboard?.isPaused == true {
             let pause = ToolbarButton(size: .large, style: style, symbol: "pause.circle")
-            pause.toolTip = pausedTitle
+            pause.toolTip = AppMenu.pauseStatus
             pause.menuOffsetY = -10
-            pause.menuProvider = { [weak self] in self?.pauseMenu() }
+            pause.menuProvider = { AppMenu.makePauseMenu() }
             items.append(pause)
         }
         if case .syncing? = Services.sync?.status {
@@ -347,13 +347,6 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
         }
         toolbar.notificationBar.setItems(items)
         toolbar.needsLayout = true
-    }
-
-    var pausedTitle: String {
-        if case .paused(let until?)? = Services.clipboard?.pauseState {
-            return L10n.pausedUntil(until.formatted(date: .omitted, time: .shortened))
-        }
-        return L10n.paused
     }
 
     // MARK: Sidecar

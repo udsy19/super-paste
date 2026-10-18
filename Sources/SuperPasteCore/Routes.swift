@@ -9,9 +9,15 @@ import Foundation
 ///     superpaste://preview-item/<item id>
 ///     superpaste://edit-item/<item id>
 ///     superpaste://settings[/<pane>]
+///     superpaste://about                 Settings › About
+///     superpaste://enable-direct-paste   the Accessibility screen ("Paste to Any App")
+///     superpaste://enable-open-at-login  turns Open at login on (also `enable-run-in-background`)
+///     superpaste://enable-sync           Settings › Sync
 public enum AppRoute: Hashable, Sendable {
     case strip(StripRoute?)
     case settings(SettingsPane?)
+    case enableDirectPaste
+    case enableOpenAtLogin
 
     public static let scheme = "superpaste"
 
@@ -38,6 +44,14 @@ public enum AppRoute: Hashable, Sendable {
             guard let argument else { self = .settings(nil); return }
             guard let pane = SettingsPane(rawValue: argument.lowercased()) else { return nil }
             self = .settings(pane)
+        case "about":
+            self = .settings(.about)
+        case "enable-direct-paste":
+            self = .enableDirectPaste
+        case "enable-open-at-login", "enable-run-in-background":
+            self = .enableOpenAtLogin
+        case "enable-sync":
+            self = .settings(.sync)
         default:
             return nil
         }

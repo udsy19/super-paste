@@ -843,7 +843,7 @@ final class ColorPreviewBody: PreviewBody, NSTextFieldDelegate {
     }
 
     override func draft(for item: ClipItem) -> ClipDraft? {
-        let hex = TextClassifier.colorHex(in: field.stringValue) ?? IconColorExtractor.hex(color)
+        let hex = TextClassifier.colorHex(in: field.stringValue) ?? color.hexString
         return ClipDraft.text(hex, title: item.title, sourceApp: item.sourceApp, copiedAt: item.copiedAt ?? Date())
     }
 }

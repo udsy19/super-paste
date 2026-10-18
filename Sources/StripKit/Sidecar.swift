@@ -68,7 +68,7 @@ final class SidecarModel {
     private func run(_ note: Note) {
         switch note.id {
         case Self.enableDirectPaste.id: Services.permissions?.showAccessibilityAccess()
-        default: Services.settings?.show(pane: .general)
+        default: Services.settings?.setOpenAtLogin(true)
         }
     }
 }

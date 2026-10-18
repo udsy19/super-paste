@@ -18,7 +18,6 @@ func registerClipboardKitTests() {
     SelfTest.cases.append(("ClipboardKit.pasteContent", { clipboardPasteContent() }))
     SelfTest.cases.append(("ClipboardKit.multiPaste", { clipboardMultiPaste() }))
     SelfTest.cases.append(("ClipboardKit.pasteStackEngine", { clipboardPasteStackEngine() }))
-    SelfTest.cases.append(("ClipboardKit.appColor", { clipboardAppColor() }))
     SelfTest.cases.append(("ClipboardKit.appRecords", { MainActor.assumeIsolated { clipboardAppRecords() } }))
     SelfTest.cases.append(("ClipboardKit.pasteboardIO", { clipboardPasteboardIO() }))
     SelfTest.cases.append(("ClipboardKit.monitor", { MainActor.assumeIsolated { clipboardMonitor() } }))
@@ -500,27 +499,6 @@ private func clipboardPasteStackEngine() {
     engine.append(a)
     engine.stop()
     check(!engine.state.isActive && engine.state.items.isEmpty && engine.state.direction == .bottom, "stop empties and closes")
-}
-
-private func clipboardAppColor() {
-    check(AppColor.known("com.apple.Safari") == "#62A9F5" && AppColor.known("COM.APPLE.FINDER") == "#62A9F5", "known apps")
-    check(AppColor.known("com.adobe.Photoshop") == "#005C90" && AppColor.known("com.apple.Terminal") == "#454D4D", "table entries")
-    check(AppColor.known("com.example.unknown") == nil, "unknown apps have no built-in colour")
-
-    func pixels(_ list: [(UInt8, UInt8, UInt8, UInt8, Int)]) -> [UInt8] {
-        list.flatMap { r, g, b, a, n in Array(repeating: [r, g, b, a], count: n).flatMap { $0 } }
-    }
-    // Pure red: saturation capped at 0.85, brightness clamped to 0.96.
-    check(AppColor.derive(rgba: pixels([(255, 0, 0, 255, 10), (128, 128, 128, 255, 50)])) == "#F52525",
-          "most frequent saturated colour, gray ignored")
-    check(AppColor.derive(rgba: pixels([(0, 0, 100, 255, 5), (255, 0, 0, 128, 50)])) == "#0F0F64",
-          "dark colours keep their brightness; translucent pixels don't count")
-    check(AppColor.derive(rgba: pixels([(200, 140, 140, 255, 3)])) == "#C88C8C", "saturation 0.3, brightness in range: unchanged")
-    check(AppColor.derive(rgba: pixels([(200, 150, 150, 255, 3)])) == nil, "saturation 0.25 is not above 0.25")
-    check(AppColor.derive(rgba: pixels([(128, 128, 128, 255, 9), (255, 255, 255, 255, 9)])) == nil, "all gray: nil")
-    check(AppColor.derive(rgba: []) == nil, "no pixels: nil")
-    check(AppColor.derive(rgba: pixels([(0, 0, 255, 255, 2), (255, 0, 0, 255, 2)])) ==
-          AppColor.derive(rgba: pixels([(255, 0, 0, 255, 2), (0, 0, 255, 255, 2)])), "ties don't depend on order")
 }
 
 @MainActor

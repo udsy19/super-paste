@@ -149,41 +149,6 @@ enum Symbols {
         return image
     }
 
-    /// Menu item icons appear only on macOS 26 (ui-reference §4.8).
-    static var menuIconsEnabled: Bool { SPStyle.current == .glass }
-}
-
-extension NSMenuItem {
-    /// Sets the icon on macOS 26 only (older systems show menus without icons, ui-reference §4.8).
-    func withSymbol(_ name: String) -> NSMenuItem {
-        if Symbols.menuIconsEnabled { image = Symbols.image(name) }
-        return self
-    }
-
-    static func make(_ title: String, symbol: String? = nil, key: String = "", modifiers: NSEvent.ModifierFlags = .command,
-                       enabled: Bool = true, handler: @escaping @MainActor () -> Void) -> NSMenuItem {
-        let item = ClosureMenuItem(title: title, handler: handler)
-        item.keyEquivalent = key
-        item.keyEquivalentModifierMask = key.isEmpty ? [] : modifiers
-        item.isEnabled = enabled
-        if let symbol { _ = item.withSymbol(symbol) }
-        return item
-    }
-}
-
-/// A menu item that runs a closure.
-final class ClosureMenuItem: NSMenuItem {
-    private let handler: @MainActor () -> Void
-
-    init(title: String, handler: @escaping @MainActor () -> Void) {
-        self.handler = handler
-        super.init(title: title, action: #selector(run), keyEquivalent: "")
-        target = self
-    }
-
-    required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    @objc private func run() { MainActor.assumeIsolated { handler() } }
 }
 
 extension NSView {

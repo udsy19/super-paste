@@ -5,7 +5,7 @@ import SwiftUI
 import SuperPasteCore
 @testable import StripKit
 
-// Owned by StripKit. Pure logic (layout math, selection, key and mouse mapping, dates, icon colours, suggestions) and
+// Owned by StripKit. Pure logic (layout math, selection, key and mouse mapping, dates, header colours, suggestions) and
 // the strip driven against an in-memory store. Set STRIPKIT_RENDER_DIR to also write offscreen PNG renders there.
 func registerStripKitTests() {
     SelfTest.cases.append(("StripKit.install", { MainActor.assumeIsolated { stripInstall() } }))
@@ -15,7 +15,7 @@ func registerStripKitTests() {
     SelfTest.cases.append(("StripKit.keyMap", { stripKeyMap() }))
     SelfTest.cases.append(("StripKit.mouseMap", { stripMouseMap() }))
     SelfTest.cases.append(("StripKit.dates", { stripDates() }))
-    SelfTest.cases.append(("StripKit.iconColor", { MainActor.assumeIsolated { stripIconColor() } }))
+    SelfTest.cases.append(("StripKit.headerColor", { MainActor.assumeIsolated { stripHeaderColor() } }))
     SelfTest.cases.append(("StripKit.presentation", { stripPresentation() }))
     SelfTest.cases.append(("StripKit.suggestions", { stripSuggestions() }))
     SelfTest.cases.append(("StripKit.controller", { MainActor.assumeIsolated { stripController() } }))
@@ -219,45 +219,9 @@ private func stripDates() {
     check(!CardDateText.tooltip(for: now, locale: en).isEmpty, "tooltip")
 }
 
-// MARK: - Header colour from the app icon (ui-reference §4.3)
+// MARK: - Header colour (ui-reference §4.3; the icon rule itself is `AppColor`, checked in CoreTests)
 
-@MainActor private func stripIconColor() {
-    func pixels(_ colors: [(UInt8, UInt8, UInt8, UInt8, Int)]) -> [UInt8] {
-        colors.flatMap { r, g, b, a, n in Array(repeating: [r, g, b, a], count: n).flatMap { $0 } }
-    }
-    func hsb(_ c: NSColor) -> (CGFloat, CGFloat, CGFloat) {
-        var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0, a: CGFloat = 0
-        (c.usingColorSpace(.sRGB) ?? c).getHue(&h, saturation: &s, brightness: &v, alpha: &a)
-        return (h, s, v)
-    }
-    // Most frequent saturated opaque colour wins; gray, translucent and dull pixels don't count.
-    let red = IconColorExtractor.dominantColor(rgba: pixels([(255, 0, 0, 255, 50), (0, 0, 255, 255, 30),
-                                                             (128, 128, 128, 255, 500), (0, 255, 0, 200, 900)]))
-    check(red != nil, "found a colour")
-    if let red {
-        let (h, s, v) = hsb(red)
-        check(abs(h) < 0.01 || abs(h - 1) < 0.01, "hue is red")
-        check(abs(s - 0.85) < 0.01, "saturation capped at 0.85 (\(s))")
-        check(abs(v - 0.96) < 0.01, "bright colours clamp to 0.96 (\(v))")
-    }
-    let dim = IconColorExtractor.dominantColor(rgba: pixels([(80, 60, 40, 255, 10)]))!
-    let (_, _, v) = hsb(dim)
-    check(abs(v - 80.0 / 255) < 0.01, "dark colours keep their brightness")
-    let mid = IconColorExtractor.dominantColor(rgba: pixels([(130, 40, 40, 255, 10)]))!
-    check(abs(hsb(mid).2 - 0.75) < 0.01, "brightness over 0.4 rises to at least 0.75")
-    check(IconColorExtractor.dominantColor(rgba: pixels([(200, 200, 200, 255, 10), (255, 0, 0, 128, 10)])) == nil,
-          "nothing qualifies: gray fallback")
-    check(IconColorExtractor.hex(NSColor(srgbRed: 1, green: 0.5, blue: 0, alpha: 1)) == "#FF8000", "hex")
-
-    // Rendering a real NSImage goes through the same rule.
-    let image = NSImage(size: NSSize(width: 64, height: 64), flipped: false) { rect in
-        NSColor(srgbRed: 0.1, green: 0.4, blue: 0.9, alpha: 1).setFill()
-        rect.fill()
-        return true
-    }
-    let blue = IconColorExtractor.dominantColor(of: image)
-    check(blue.map { abs(hsb($0).0 - 0.6) < 0.03 } ?? false, "image → blue")
-
+@MainActor private func stripHeaderColor() {
     // Header colour precedence: pinboard, stored app colour, then gray.
     let board = Pinboard(name: "Work", color: .green, order: 0)
     let pinned = ClipItem(kind: .text, pins: [PinboardPin(pinboardID: board.id, order: 1)])
@@ -791,11 +755,14 @@ final class StripFakeStore: ItemStoring {
 @MainActor
 final class StripFakeClipboard: ClipboardMonitoring {
     let pauseState: PauseState
+    /// What `pause(until:)` and `resume()` were asked (the app menu's checks in CoreTests).
+    private(set) var pauses: [Date?] = []
+    private(set) var resumes = 0
     init(state: PauseState) { pauseState = state }
     func start() {}
     var pauseChanges: AnyPublisher<PauseState, Never> { Just(pauseState).eraseToAnyPublisher() }
-    func pause(until date: Date?) {}
-    func resume() {}
+    func pause(until date: Date?) { pauses.append(date) }
+    func resume() { resumes += 1 }
     var captures: AnyPublisher<ClipItem, Never> { Empty().eraseToAnyPublisher() }
 }
 

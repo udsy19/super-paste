@@ -1,8 +1,8 @@
 import AppKit
 import SuperPasteCore
 
-// Menus: the card context menu (ui-reference §4.8), the tab menu (§3.4), the "…" app menu (behaviour.md §6.2) and
-// the pause item's menu.
+// Menus: the card context menu (ui-reference §4.8) and the tab menu (§3.4). The "…" button and the notification
+// bar's pause item show the shared `AppMenu` (behaviour.md §6.2, §6.3).
 extension StripController {
     // MARK: Card context menu
 
@@ -140,60 +140,10 @@ extension StripController {
         return menu
     }
 
-    // MARK: "…" menu
-
-    func overflowMenu() -> NSMenu {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        menu.addItem(.make(L10n.about, symbol: "info.circle") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.orderFrontStandardAboutPanel(nil)
-        })
-        menu.addItem(.separator())
-        menu.addItem(.make(L10n.newTextItem, symbol: "square.and.pencil", key: "n") { [weak self] in
-            guard let self else { return }
-            self.newTextItem.show(in: self.scope)
-        })
-        menu.addItem(.make(L10n.settings, symbol: "gear", key: ",") { [weak self] in self?.perform(.settings) })
-        menu.addItem(.separator())
-        let pause = NSMenuItem(title: Services.clipboard?.isPaused == true ? pausedTitle : L10n.pause, action: nil,
-                               keyEquivalent: "").withSymbol("pause.circle")
-        pause.submenu = pauseMenu()
-        menu.addItem(pause)
-        menu.addItem(.separator())
-        menu.addItem(.make(L10n.quit, symbol: "xmark.app", key: "q") { NSApp.terminate(nil) })
-        return menu
-    }
-
-    /// Pause Super Paste / Resume, then Pause for 15m … 8h (behaviour.md §6.3).
-    func pauseMenu() -> NSMenu {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        let clipboard = Services.clipboard
-        if clipboard?.isPaused == true {
-            let status = NSMenuItem(title: pausedTitle, action: nil, keyEquivalent: "")
-            status.isEnabled = false
-            menu.addItem(status)
-            menu.addItem(.make(L10n.resume, symbol: "play.circle", key: "t") { clipboard?.resume() })
-        } else {
-            menu.addItem(.make(L10n.pauseSuperPaste, symbol: "pause.circle", key: "t") { clipboard?.pause(until: nil) })
-        }
-        menu.addItem(.separator())
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .abbreviated
-        formatter.allowedUnits = [.hour, .minute]
-        let symbols = ["15.circle", "30.circle", "1.circle", "3.circle", "8.circle"]
-        for (duration, symbol) in zip(PauseDurations.all, symbols) {
-            let title = L10n.pauseFor(formatter.string(from: duration) ?? "")
-            menu.addItem(.make(title, symbol: symbol) { clipboard?.pause(until: Date().addingTimeInterval(duration)) })
-        }
-        return menu
-    }
-
     func configureToolbar() {
         guard let toolbar else { return }
         toolbar.plusButton.action = { [weak self] _ in self?.createPinboard() }
-        toolbar.menuButton.menuProvider = { [weak self] in self?.overflowMenu() }
+        toolbar.menuButton.menuProvider = { AppMenu.make() }
     }
 }
 
