@@ -139,13 +139,16 @@ public protocol ItemStoring: AnyObject {
     @discardableResult func createPinboard(name: String, color: PinboardColor) throws -> Pinboard
     /// Saves name, colour and shortcut changes (order changes go through `reorderPinboards`).
     func updatePinboard(_ pinboard: Pinboard) throws
-    /// Deletes the pinboard. Its pinned-only items are deleted; items that are also in the history stay there.
+    /// Deletes the pinboard. Its pinned-only items are deleted; items that are also in the history stay there, and
+    /// those that lose their last pin get a fresh copy date (front of the history), as with `unassign`, so retention
+    /// doesn't remove them straight away.
     func deletePinboard(_ id: UUID) throws
     /// New tab order; `ids` lists every pinboard.
     func reorderPinboards(_ ids: [UUID]) throws
     /// Pins items to a pinboard, at the end, keeping their other pins. Idempotent.
     func assign(_ itemIDs: [UUID], to pinboardID: UUID) throws
-    /// Unpins items from a pinboard. A pinned-only item that loses its last pin is deleted.
+    /// Unpins items from a pinboard. An item that loses its last pin goes back to history (its copy date is
+    /// refreshed so retention doesn't remove it straight away); nothing is deleted.
     func unassign(_ itemIDs: [UUID], from pinboardID: UUID) throws
     /// Moves items (in the given order) to just before `beforeID` in the pinboard, or to the end when nil.
     func move(_ itemIDs: [UUID], in pinboardID: UUID, before beforeID: UUID?) throws
@@ -155,9 +158,15 @@ public protocol ItemStoring: AnyObject {
     /// How many unpinned history items are older than the cutoff for `retentionDays` (0 = forever: none).
     func prunableCount(retentionDays: Int, now: Date) -> Int
     /// Deletes unpinned history items whose `copiedAt` is before `now − retentionDays` days. Returns the count.
+    /// Local only: pruning never syncs deletions, so a short retention on one Mac can't empty another Mac's history.
     @discardableResult func prune(retentionDays: Int, now: Date) throws -> Int
     /// Erase History: deletes every unpinned history item. Pinned items and pinboards stay. Returns the count.
     @discardableResult func eraseHistory() throws -> Int
+
+    // MARK: Recognised text
+
+    /// Stores text recognised in an image item (on-device OCR) so search can find it.
+    func setRecognizedText(_ text: String, for id: UUID) throws
 
     // MARK: Blobs
 
