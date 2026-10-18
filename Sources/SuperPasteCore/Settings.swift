@@ -116,6 +116,10 @@ public extension Defaults.Keys {
     // MARK: App state
 
     static let isOnboardingCompleted = Key<Bool>("isOnboardingCompleted", default: false)
+    /// Shortcuts (`displayString`) the "is used by another app" notice was shown for, so it shows once per shortcut.
+    static let hotkeyConflictsNoticed = Key<Set<String>>("hotkeyConflictsNoticed", default: [])
+    /// The Welcome pinboard onboarding seeded (`Pinboard.id`), "" before onboarding completes.
+    static let welcomePinboardID = Key<String>("welcomePinboardID", default: "")
     /// Ids of confirmations the user ticked "Don't ask again" on (`Alerts.confirm`).
     static let suppressedWarnings = Key<Set<String>>("suppressedWarnings", default: [])
 }

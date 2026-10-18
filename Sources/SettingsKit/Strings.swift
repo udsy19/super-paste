@@ -84,6 +84,7 @@ enum Strings {
         static let plainText = "Plain Text mode"
         static let plainTextSuffix = "+ ↩"
         static let reset = "Reset shortcuts to default"
+        static let conflictInfo = "Pressing it does nothing while the other app holds it. Quit that app, or record a different shortcut."
         static let resetConfirmation = "Are you sure you want to reset all shortcuts to their default values?"
         static let optionKey = "Shortcuts using the Option key without Command or Control may not work correctly before macOS 15.2. Please consider updating to the latest version of macOS."
         static func usedInMenu(_ title: String) -> String {
@@ -184,23 +185,6 @@ enum Strings {
         static let shortcutInfo = "Instantly access Super Paste in any app"
         static let history = "Clipboard history"
         static let historyInfo = "How long to retain copied content"
-        static let privateTitle = "Private by Design"
-        static let privateSubtitle = "Super Paste is an app on your Mac, not a service. Your clipboard history stays on this Mac unless you turn on sync."
-        static let localTitle = "Stays on this Mac"
-        static let localInfo = "History is stored locally. No account, no analytics."
-        static let syncTitle = "Sync only if you want it"
-        static let syncDetail = "End-to-end encrypted, through a folder you choose."
-        static let updatesTitle = "Updates from GitHub"
-        static let updatesInfo = "Checks every few hours. You can turn it off."
-        static let mcpTitle = "MCP server off by default"
-        static let mcpInfo = "Listens only on this Mac. Clients need your approval."
-        static let notarizedTitle = "Not notarized by Apple"
-        static let notarizedInfo = "That's why macOS asked before the first launch. Open Anyway, in Privacy & Security, trusts this copy; updates install only with the same signature."
-        static let readyTitle = "You're All Set"
-        static let readySubtitle = "Two shortcuts are all you need to get going."
-        static let activateInfo = "Open your history in any app, then press Return to paste."
-        static let stackInfo = "Copy a few things in a row, then press ⌘V to paste them one by one."
-        static let notSet = "Not set"
     }
 
     enum Permissions {

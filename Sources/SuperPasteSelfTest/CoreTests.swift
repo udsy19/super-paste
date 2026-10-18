@@ -14,6 +14,31 @@ func registerCoreTests() {
     SelfTest.cases.append(("Core.routes", { coreRoutes() }))
     SelfTest.cases.append(("Core.appColor", { MainActor.assumeIsolated { coreAppColor() } }))
     SelfTest.cases.append(("Core.appMenu", { MainActor.assumeIsolated { coreAppMenu() } }))
+    SelfTest.cases.append(("Core.hotkeyConflicts", { MainActor.assumeIsolated { coreHotkeyConflicts() } }))
+}
+
+/// A combination another registration already holds fails and is listed as unavailable until it registers or is
+/// forgotten; the wording names the shortcut.
+@MainActor private func coreHotkeyConflicts() {
+    let center = HotkeyCenter.shared
+    let shortcut = Shortcut(key: kVK_F19, modifiers: [.command, .option, .control, .shift])
+    var seen: [Set<Shortcut>] = []
+    let watch = center.unavailableChanges.sink { seen.append($0) }
+    defer { watch.cancel() }
+    guard let first = center.register(shortcut, handler: {}) else { check(false, "a free combination registers"); return }
+    check(center.unavailable.isEmpty, "nothing unavailable yet")
+    let second = center.register(shortcut, handler: {})
+    check(second == nil && center.unavailable == [shortcut], "the same combination again is unavailable")
+    center.unregister(first)
+    if let second { center.unregister(second) }
+    check(center.register(shortcut, handler: {}).map { center.unregister($0); return true } == true && center.unavailable.isEmpty,
+          "registering it again clears the mark")
+    _ = center.register(shortcut, handler: {})  // held
+    check(center.register(shortcut, handler: {}) == nil && !center.unavailable.isEmpty, "held again")
+    center.forgetUnavailable()
+    check(center.unavailable.isEmpty && seen.last == [], "forgetUnavailable clears it and publishes")
+    center.unregisterAll()
+    check(HotkeyConflict.title(shortcut) == "⌃⌥⇧⌘F19 is used by another app", "the notice names the shortcut")
 }
 
 private func roundTrip<T: Codable & Equatable>(_ value: T) -> Bool {
@@ -331,7 +356,7 @@ private func coreRoutes() {
 /// The app menu shared by the menu bar item and the strip's "…" button (behaviour.md §6.2, §6.3).
 @MainActor private func coreAppMenu() {
     let saved = Services.clipboard
-    defer { Services.clipboard = saved; Defaults.reset(.activationShortcut) }
+    defer { Services.clipboard = saved }
     func titles(_ menu: NSMenu) -> [String] { menu.items.map { $0.isSeparatorItem ? "—" : $0.title } }
     func choose(_ menu: NSMenu, _ index: Int) {
         let item = menu.items[index]
@@ -341,20 +366,20 @@ private func coreRoutes() {
     let running = StripFakeClipboard(state: .running)
     Services.clipboard = running
     let menu = AppMenu.make()
-    check(titles(menu) == ["Open Super Paste", "Paste Stack", "New Text Item", "—", "Pause", "—", "Settings…", "Getting Started",
-                           "About Super Paste", "—", "Quit Super Paste"], "items and order: \(titles(menu))")
+    check(titles(menu) == ["About Super Paste", "—", "New Text Item", "Settings…", "—", "Help", "—", "Pause", "—", "Quit Super Paste"],
+          "items and order: \(titles(menu))")
     check(!titles(menu).contains { $0.localizedCaseInsensitiveContains("update") }, "no update item: updates are automatic")
     func key(_ title: String) -> String? {
         menu.items.first { $0.title == title }.map { item in
             Shortcut(keyEquivalent: item.keyEquivalent, modifiers: item.keyEquivalentModifierMask)?.displayString ?? ""
         }
     }
-    check(key("Open Super Paste") == "⇧⌘V" && key("Paste Stack") == "⇧⌘C" && key("New Text Item") == "⌘N"
-          && key("Settings…") == "⌘," && key("Quit Super Paste") == "⌘Q" && key("Getting Started") == "", "shortcuts")
-    Defaults[.activationShortcut] = Shortcut(key: kVK_ANSI_B, modifiers: [.option, .command])
-    check(AppMenu.make().items.first?.keyEquivalent == "b", "the activation shortcut is read when the menu is built")
-    Defaults[.activationShortcut] = nil
-    check(AppMenu.make().items.first?.keyEquivalent == "", "a removed shortcut shows none")
+    check(key("New Text Item") == "⌘N" && key("Settings…") == "⌘," && key("Quit Super Paste") == "⌘Q" && key("About Super Paste") == "",
+          "shortcuts")
+    let help = menu.items.first { $0.title == "Help" }?.submenu
+    check(help.map(titles) == ["Getting Started", "Keyboard Shortcuts", "Help Center", "—", "Feature Request", "Contact Support"],
+          "Help submenu: \(help.map(titles) ?? [])")
+    check(help?.items.allSatisfy { $0.isSeparatorItem || $0.keyEquivalent.isEmpty } == true, "help items have no shortcuts")
 
     let pause = AppMenu.makePauseMenu()
     check(titles(pause) == ["Pause for 15m", "Pause for 30m", "Pause for 1h", "Pause for 3h", "Pause for 8h", "—", "Until I Resume"],
@@ -371,7 +396,7 @@ private func coreRoutes() {
     let paused = StripFakeClipboard(state: .paused(until: until))
     Services.clipboard = paused
     let status = "Paused until \(until.formatted(date: .omitted, time: .shortened))"
-    check(AppMenu.pauseStatus == status && AppMenu.make().items[4].title == status, "the Pause item shows when it ends")
+    check(AppMenu.pauseStatus == status && AppMenu.make().items[7].title == status, "the Pause item shows when it ends")
     let resume = AppMenu.makePauseMenu()
     check(titles(resume).prefix(3) == [status, "Resume", "—"] && resume.items[0].isEnabled == false
           && resume.items[1].keyEquivalent == "t" && resume.items.count == 8, "while paused: status, Resume ⌘T, the durations")

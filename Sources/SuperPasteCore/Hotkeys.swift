@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import SwiftUI
 
 /// A key + modifier combination.
@@ -114,10 +115,18 @@ public final class HotkeyCenter {
     private var handlerInstalled = false
     /// While a shortcut recorder is focused, hotkeys are suspended so they can be re-recorded.
     public var isSuspended = false
+    /// Shortcuts whose last registration failed: another app (the reference clipboard manager, say) holds the
+    /// combination system-wide, so pressing it does nothing for Super Paste. Settings → Shortcuts warns about these.
+    public private(set) var unavailable: Set<Shortcut> = [] {
+        didSet { if unavailable != oldValue { unavailableSubject.send(unavailable) } }
+    }
+    private let unavailableSubject = CurrentValueSubject<Set<Shortcut>, Never>([])
+    public var unavailableChanges: AnyPublisher<Set<Shortcut>, Never> { unavailableSubject.eraseToAnyPublisher() }
 
     private init() {}
 
-    /// Registers a hotkey and returns a token for `unregister`. Returns nil if the combo is taken.
+    /// Registers a hotkey and returns a token for `unregister`. Returns nil if the combo is taken, and records the
+    /// shortcut in `unavailable` until a later registration of it succeeds or `forgetUnavailable()` runs.
     @discardableResult
     public func register(_ shortcut: Shortcut, handler: @escaping () -> Void) -> UInt32? {
         installHandlerIfNeeded()
@@ -126,10 +135,14 @@ public final class HotkeyCenter {
         let hotKeyID = EventHotKeyID(signature: OSType(0x5350_5354) /* 'SPST' */, id: id)
         let status = RegisterEventHotKey(shortcut.keyCode, shortcut.carbonModifiers, hotKeyID,
                                          GetApplicationEventTarget(), 0, &ref)
-        guard status == noErr, let ref else { return nil }
+        guard status == noErr, let ref else { unavailable.insert(shortcut); return nil }
+        unavailable.remove(shortcut)
         registrations[id] = Registration(ref: ref, handler: handler)
         return id
     }
+
+    /// Clears `unavailable` before registering the current set again (a changed shortcut leaves the old one behind).
+    public func forgetUnavailable() { unavailable = [] }
 
     public func unregister(_ token: UInt32) {
         if let r = registrations.removeValue(forKey: token) { UnregisterEventHotKey(r.ref) }
@@ -160,6 +173,17 @@ public final class HotkeyCenter {
     }
 }
 
+/// Wording for a shortcut another app holds (the launch notice and the Settings → Shortcuts warning).
+public enum HotkeyConflict {
+    /// "⇧⌘V is used by another app".
+    public static func title(_ shortcut: Shortcut) -> String { "\(shortcut.displayString) is used by another app" }
+    public static func text(_ name: String) -> String {
+        "Super Paste couldn't register \(name), so pressing it does nothing while the other app (often another clipboard manager) is running. Quit that app, or choose a different shortcut in Settings › Shortcuts. The menu bar icon opens Super Paste in the meantime."
+    }
+    public static let openSettings = "Open Shortcuts Settings"
+    public static let later = "Later"
+}
+
 // MARK: - Recorder control
 
 /// Click-to-record shortcut field. Esc cancels, ⌫ clears.
@@ -172,7 +196,10 @@ public final class ShortcutRecorderView: NSView {
     private var recording = false { didSet { needsDisplay = true; HotkeyCenter.shared.isSuspended = recording } }
     private var monitor: Any?
 
-    public override var intrinsicContentSize: NSSize { NSSize(width: 150, height: 24) }
+    /// The field's width (Settings uses the default; onboarding's Quick Start card asks for 120).
+    public var width: CGFloat = 150 { didSet { invalidateIntrinsicContentSize() } }
+
+    public override var intrinsicContentSize: NSSize { NSSize(width: width, height: 24) }
     public override var acceptsFirstResponder: Bool { true }
 
     public override func mouseDown(with event: NSEvent) {
@@ -253,15 +280,20 @@ public final class ShortcutRecorderView: NSView {
 public struct ShortcutRecorder: NSViewRepresentable {
     @Binding var shortcut: Shortcut?
     let validator: ((Shortcut) -> String?)?
-    public init(shortcut: Binding<Shortcut?>, validator: ((Shortcut) -> String?)? = nil) {
-        _shortcut = shortcut; self.validator = validator
+    let width: CGFloat
+    public init(shortcut: Binding<Shortcut?>, validator: ((Shortcut) -> String?)? = nil, width: CGFloat = 150) {
+        _shortcut = shortcut; self.validator = validator; self.width = width
     }
     public func makeNSView(context: Context) -> ShortcutRecorderView {
         let v = ShortcutRecorderView()
         v.shortcut = shortcut
         v.validator = validator
+        v.width = width
         v.onChange = { shortcut = $0 }
         return v
     }
-    public func updateNSView(_ v: ShortcutRecorderView, context: Context) { v.shortcut = shortcut }
+    public func updateNSView(_ v: ShortcutRecorderView, context: Context) {
+        v.shortcut = shortcut
+        if v.width != width { v.width = width }
+    }
 }

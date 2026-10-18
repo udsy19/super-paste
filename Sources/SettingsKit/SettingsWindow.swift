@@ -136,6 +136,7 @@ struct SettingsSidebar: View {
     /// Draws its own background and leaves room for the title bar (snapshots, which have neither).
     var opaque = false
     @ObservedObject private var accessibility: PermissionMonitor
+    @ObservedObject private var conflicts = HotkeyConflicts.shared
     @Default(.isDirectPasteEnabled) private var directPaste
 
     init(model: SettingsModel, opaque: Bool) {
@@ -172,7 +173,11 @@ struct SettingsSidebar: View {
     }
 
     private func showsWarning(_ pane: SettingsPane) -> Bool {
-        pane == .general && directPaste && !accessibility.flow.isGranted
+        switch pane {
+        case .general: directPaste && !accessibility.flow.isGranted
+        case .shortcuts: !conflicts.unavailable.isEmpty
+        default: false
+        }
     }
 }
 
