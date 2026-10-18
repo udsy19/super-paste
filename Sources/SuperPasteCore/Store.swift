@@ -231,8 +231,9 @@ public protocol SyncStoring: AnyObject {
     /// Local changes with `sequence > after`, oldest first; only the latest state of each record.
     func journal(after sequence: Int64, limit: Int) -> [JournalEntry]
     /// Applies records from other Macs: a record wins when its `updatedAt` is newer than the local copy's (a
-    /// tombstone deletes). Blobs the records reference must be saved first (`ItemStoring.saveBlob`). Applying
-    /// doesn't journal. Returns how many records changed something.
+    /// tombstone deletes, and wins a tie with an edit). Equal `updatedAt`s are broken the same way on every Mac:
+    /// the item's device id, then a digest of the record. Blobs the records reference must be saved first
+    /// (`ItemStoring.saveBlob`). Applying doesn't journal. Returns how many records changed something.
     @discardableResult func apply(_ records: [SyncRecord]) throws -> Int
     /// Whether a blob with this digest is stored.
     func hasBlob(_ digest: String) -> Bool

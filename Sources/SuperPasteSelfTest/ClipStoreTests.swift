@@ -20,6 +20,7 @@ func registerClipStoreTests() {
         ("ClipStore.changes", storeChanges),
         ("ClipStore.syncJournal", storeSyncJournal),
         ("ClipStore.syncApply", storeSyncApply),
+        ("ClipStore.syncTies", storeSyncTies),
         ("ClipStore.persistence", storePersistence),
         ("ClipStore.recovery", storeRecovery),
         ("ClipStore.performance", storePerformance),
@@ -553,6 +554,52 @@ private func bytes(_ count: Int, seed: UInt8) -> Data { Data((0..<count).map { U
     check((try? target.apply([.tombstone(boardGone)])) == 1 && target.pinboards.isEmpty, "pinboard tombstone deletes")
     check(target.item(pinnedOnly.id) == nil && target.item(item.id)?.isPinned == false, "its pinned-only items go, history stays")
     subscription.cancel()
+}
+
+/// Two Macs change the same record at the same instant: whichever order the versions arrive in, both keep the same
+/// one, and applying the loser again changes nothing.
+@MainActor private func storeSyncTies() {
+    let (a, _) = makeStore()
+    let (b, _) = makeStore()
+    let item = insert(a, text("shared note", device: air))
+    guard let board = try? a.createPinboard(name: "Shared", color: .blue) else { return check(false, "pinboard") }
+    _ = try? b.apply(a.journal(after: 0, limit: 100).map(\.record))
+    check(b.item(item.id) == item && b.pinboards == [board], "both Macs start equal")
+
+    /// Each Mac holds one version, then receives the other's.
+    func exchange(_ onA: SyncRecord, _ onB: SyncRecord) {
+        _ = try? a.apply([onA])
+        _ = try? b.apply([onB])
+        _ = try? a.apply([onB])
+        _ = try? b.apply([onA])
+    }
+    let stamp = item.updatedAt + 60
+
+    var titledA = item, titledB = item
+    titledA.title = "Title from A"; titledA.updatedAt = stamp
+    titledB.title = "Title from B"; titledB.updatedAt = stamp
+    exchange(.item(titledA), .item(titledB))
+    let kept = a.item(item.id)
+    check(kept != nil && kept == b.item(item.id) && [titledA, titledB].contains(kept!), "an edit tie converges (\(kept?.title ?? "nil"))")
+    check((try? a.apply([.item(titledA), .item(titledB)])) == 0 && (try? b.apply([.item(titledB), .item(titledA)])) == 0,
+          "the other version doesn't come back")
+
+    var fromAir = item, fromStudio = item
+    fromAir.title = "Air"; fromAir.updatedAt = stamp + 10
+    fromStudio.device = studio; fromStudio.title = "Studio"; fromStudio.updatedAt = stamp + 10
+    exchange(.item(fromAir), .item(fromStudio))
+    check(a.item(item.id)?.title == "Studio" && b.item(item.id)?.title == "Studio", "the greater device id wins a tie")
+
+    var boardA = board, boardB = board
+    boardA.name = "Named on A"; boardA.updatedAt = stamp
+    boardB.name = "Named on B"; boardB.updatedAt = stamp
+    exchange(.pinboard(boardA), .pinboard(boardB))
+    check(a.pinboards == b.pinboards && [boardA, boardB].contains(a.pinboards.first!), "a pinboard tie converges")
+
+    var edited = fromStudio
+    edited.title = "Edited"; edited.updatedAt = stamp + 20
+    exchange(.item(edited), .tombstone(SyncTombstone(entity: .item, id: item.id, deletedAt: stamp + 20)))
+    check(a.item(item.id) == nil && b.item(item.id) == nil, "a delete wins a tie with an edit")
 }
 
 @MainActor private func storePersistence() {

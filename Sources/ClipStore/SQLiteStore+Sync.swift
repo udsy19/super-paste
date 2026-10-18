@@ -3,7 +3,8 @@ import SuperPasteCore
 
 // The store's side of folder sync (behaviour.md §17 replacement). Every local write puts its record in `journal`
 // (one row per record, re-sequenced on each write, so a cursor sees only the latest state); `apply` merges records
-// from other Macs last-writer-wins on `updatedAt`, with tombstones that keep deleted records from coming back.
+// from other Macs last-writer-wins on `updatedAt` (`SyncOrder` breaks ties the same way on every Mac), with
+// tombstones that keep deleted records from coming back. A deletion wins a tie with an edit.
 //
 // Retention is local: pruning leaves no tombstone and drops the item's journal row. So that sync doesn't bring a
 // pruned item straight back, an item record for an id this Mac doesn't have is skipped when it is unpinned history
@@ -85,7 +86,7 @@ extension SQLiteStore {
 
     private func applyPinboard(_ pinboard: Pinboard) throws -> Bool {
         if let local = try loadPinboard(pinboard.id) {
-            guard pinboard.updatedAt > local.updatedAt else { return false }
+            guard SyncOrder.wins(pinboard, over: local) else { return false }
         } else if let deletedAt = try tombstoneDate(.pinboard, pinboard.id), deletedAt >= pinboard.updatedAt {
             return false
         }
@@ -99,7 +100,7 @@ extension SQLiteStore {
         var replaced = Set<String>()
         var indexed = (body: "", ocr: "")
         if let local = try loadItem(item.id) {
-            guard item.updatedAt > local.updatedAt else { return nil }
+            guard SyncOrder.wins(item, over: local) else { return nil }
             replaced = Set(local.blobRefs.map(\.digest))
             let current = try indexedText(of: item.id)
             indexed.body = local.text == item.text && local.checksum == item.checksum
@@ -126,14 +127,14 @@ extension SQLiteStore {
                 try recordTombstone(.item, tombstone.id, at: tombstone.deletedAt)
                 return nil
             }
-            guard found.1.updatedAt < tombstone.deletedAt else { return nil }
+            guard found.1.updatedAt <= tombstone.deletedAt else { return nil }
             return try removeItem(rid: found.0, id: tombstone.id, at: tombstone.deletedAt, trace: .tombstone)
         case .pinboard:
             guard let local = try loadPinboard(tombstone.id) else {
                 try recordTombstone(.pinboard, tombstone.id, at: tombstone.deletedAt)
                 return nil
             }
-            guard local.updatedAt < tombstone.deletedAt else { return nil }
+            guard local.updatedAt <= tombstone.deletedAt else { return nil }
             try db.run("DELETE FROM pinboards WHERE id = ?", [tombstone.id])
             try recordTombstone(.pinboard, tombstone.id, at: tombstone.deletedAt)
             // Pinned-only items left without a pin can't show anywhere; the other Mac deleted them too.
@@ -147,5 +148,29 @@ extension SQLiteStore {
             }
             return digests
         }
+    }
+}
+
+/// Which of two versions of one record wins (last writer wins). The newer `updatedAt` wins; on a tie, an item copied
+/// on the device with the greater id, then the version whose canonical JSON has the greater SHA-256. Every Mac
+/// compares the same two versions the same way, whichever it holds and whichever arrives, so they converge.
+/// Identical versions don't replace each other.
+enum SyncOrder {
+    static func wins(_ incoming: ClipItem, over local: ClipItem) -> Bool {
+        if incoming.updatedAt != local.updatedAt { return incoming.updatedAt > local.updatedAt }
+        let (a, b) = (incoming.device?.id ?? "", local.device?.id ?? "")
+        if a != b { return a > b }
+        return digest(incoming) > digest(local)
+    }
+
+    static func wins(_ incoming: Pinboard, over local: Pinboard) -> Bool {
+        if incoming.updatedAt != local.updatedAt { return incoming.updatedAt > local.updatedAt }
+        return digest(incoming) > digest(local)
+    }
+
+    private static func digest<T: Encodable>(_ value: T) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return (try? encoder.encode(value)).map(ClipChecksum.hex(of:)) ?? ""
     }
 }
