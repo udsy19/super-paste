@@ -13,7 +13,8 @@ SuperPastePaths.base = FileManager.default.temporaryDirectory.appendingPathCompo
 let defaultsSuite = "superpaste-selftest-\(UUID().uuidString)"
 Defaults.store = UserDefaults(suiteName: defaultsSuite)!
 
-// Each module owns Sources/SuperPasteSelfTest/<Module>Tests.swift and its register function.
+// Each module owns Sources/SuperPasteSelfTest/<Module>Tests.swift and its register function; EndToEndTests.swift
+// runs the modules together.
 registerCoreTests()
 registerClipStoreTests()
 registerClipboardKitTests()
@@ -22,6 +23,7 @@ registerSettingsKitTests()
 registerSyncKitTests()
 registerMCPKitTests()
 registerUpdateKitTests()
+registerEndToEndTests()
 
 for (name, run) in SelfTest.cases {
     let before = failures; run()
