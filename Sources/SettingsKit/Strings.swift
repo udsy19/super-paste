@@ -166,7 +166,7 @@ enum Strings {
         static let updatesInfo = "Checks GitHub for a new version every few hours and installs it in the background."
         static func lastChecked(_ when: String) -> String { "Last checked \(when)." }
         static let privacy = "Privacy"
-        static let privacyText = "Super Paste is local-first. Your clipboard history is stored on this Mac, with no account and no tracking. Nothing leaves your Mac unless you turn on sync, automatic updates or the MCP server."
+        static let privacyText = "Super Paste is local-first. Your clipboard history is stored on this Mac, with no account and no tracking. Your history never leaves this Mac unless you turn on sync or the MCP server. The app checks GitHub for updates, and link previews fetch the title of links you copy; both can be turned off."
     }
 
     enum Onboarding {
@@ -183,7 +183,7 @@ enum Strings {
         static let history = "Clipboard history"
         static let historyInfo = "How long to retain copied content"
         static let privateTitle = "Private by Design"
-        static let privateSubtitle = "Super Paste is an app on your Mac, not a service. Nothing leaves this Mac unless you turn it on."
+        static let privateSubtitle = "Super Paste is an app on your Mac, not a service. Your clipboard history stays on this Mac unless you turn on sync."
         static let localTitle = "Stays on this Mac"
         static let localInfo = "History is stored locally. No account, no analytics."
         static let syncTitle = "Sync only if you want it"

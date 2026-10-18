@@ -8,8 +8,7 @@ import SuperPasteCore
 /// (`AppMenu`, the same menu as the strip's "…" button). The reference app's mapping wasn't confirmed (behaviour.md
 /// §22.3 gap 5); this follows ui-reference §10 and adds Option-click from behaviour.md §6.1.
 ///
-/// While capturing is paused the icon is drawn dimmed. The icon is the `doc.on.clipboard` symbol from Paste's symbol
-/// set until Super Paste has its own menu bar artwork (and the copy animation that goes with it).
+/// The icon is the app icon's stack of cards (see `glyph`), drawn dimmed while capturing is paused.
 @MainActor
 final class StatusItemController: NSObject {
     private var item: NSStatusItem?
@@ -25,6 +24,20 @@ final class StatusItemController: NSObject {
             .store(in: &cancellables)
     }
 
+    /// The app icon's stack of cards as a 16 pt template: two thin card tops above a full card.
+    private static let glyph: NSImage = {
+        let image = NSImage(size: NSSize(width: 16, height: 16), flipped: true) { _ in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: NSRect(x: 4.5, y: 2.5, width: 7, height: 1.5), xRadius: 0.75, yRadius: 0.75).fill()
+            NSBezierPath(roundedRect: NSRect(x: 3.5, y: 5, width: 9, height: 1.5), xRadius: 0.75, yRadius: 0.75).fill()
+            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 7.5, width: 11, height: 6.5), xRadius: 2, yRadius: 2).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Super Paste"
+        return image
+    }()
+
     private func setShown(_ shown: Bool) {
         if !shown, let item {
             NSStatusBar.system.removeStatusItem(item)
@@ -32,8 +45,7 @@ final class StatusItemController: NSObject {
         } else if shown, item == nil {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
             if let button = item.button {
-                button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Super Paste")
-                button.image?.isTemplate = true
+                button.image = Self.glyph
                 button.appearsDisabled = Services.clipboard.isPaused
                 button.target = self
                 button.action = #selector(clicked)
