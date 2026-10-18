@@ -16,6 +16,8 @@ import SuperPasteCore
 @MainActor
 public final class FolderSync: SyncServicing {
     /// "Super Paste" in iCloud Drive when iCloud Drive is set up on this Mac; nil otherwise.
+    public var defaultFolder: URL? { Self.defaultFolder }
+
     public nonisolated static var defaultFolder: URL? {
         let drive = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)

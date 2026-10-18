@@ -210,6 +210,7 @@ private func settingsIgnoredApps() {
     }
     var statusChanges: AnyPublisher<SyncStatus, Never> { subject.eraseToAnyPublisher() }
     var folder: URL?
+    var defaultFolder: URL? { nil }
     func enable(folder: URL) throws { self.folder = folder; status = .synced(nil) }
     func disable() { folder = nil; status = .disabled }
     func syncNow() {}

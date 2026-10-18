@@ -93,7 +93,7 @@ final class SyncModel: ObservableObject {
         panel.canCreateDirectories = true
         panel.prompt = Strings.Action.choose
         panel.message = Strings.Sync.chooseFolderMessage
-        panel.directoryURL = folder
+        panel.directoryURL = folder ?? service?.defaultFolder?.deletingLastPathComponent()
         NSApp.activate()
         return panel.runModal() == .OK ? panel.url : nil
     }

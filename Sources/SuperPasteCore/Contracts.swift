@@ -174,6 +174,8 @@ public protocol SyncServicing: AnyObject {
     var statusChanges: AnyPublisher<SyncStatus, Never> { get }
     /// The sync folder while enabled.
     var folder: URL? { get }
+    /// Where sync suggests putting its data ("Super Paste" in iCloud Drive), when iCloud Drive is available.
+    var defaultFolder: URL? { get }
     /// Starts syncing through `folder` (creating or joining the Super Paste data in it).
     func enable(folder: URL) throws
     /// Stops syncing; local and folder data stay as they are.
