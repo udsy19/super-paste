@@ -26,11 +26,12 @@ final class ToolbarView: FlippedView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    /// Opens or closes the search layout: centred, ≥ 400 pt and ≥ 25 % wide, with the tabs and "+" folded away;
-    /// animated with ease-out (ui-reference §3.1).
+    /// Opens or closes the search layout: the field centred, ≥ 400 pt and ≥ 25 % wide, the tabs collapsed to their
+    /// icons after it and "+" folded away; animated with ease-out (ui-reference §3.1, §3.4).
     func setSearchActive(_ active: Bool, animated: Bool) {
         guard active != isSearchActive else { return }
         isSearchActive = active
+        tabBar.isCollapsed = active
         let frames = self.frames(searchActive: active)
         guard animated, window?.isVisible == true else {
             apply(frames, alpha: active ? 0 : 1)
@@ -61,10 +62,8 @@ final class ToolbarView: FlippedView {
         set(plusButton, f.plus)
         set(menuButton, f.menu)
         if animator {
-            tabBar.animator().alphaValue = alpha
             plusButton.animator().alphaValue = alpha
         } else {
-            tabBar.alphaValue = alpha
             plusButton.alphaValue = alpha
         }
     }
@@ -86,12 +85,15 @@ final class ToolbarView: FlippedView {
         let tabsHeight = TabBarView.height
 
         if searchActive {
-            let w = min(max(t.activeSearchMinWidth, width * t.activeSearchMinFraction), max(0, rightLimit - leftLimit))
+            // The collapsed tabs keep their place after the field; the field centres as far as that allows.
+            let tabsWidth = max(0, min(tabBar.contentWidth, rightLimit - leftLimit - t.activeSearchMinWidth - t.itemSpacing))
+            let w = min(max(t.activeSearchMinWidth, width * t.activeSearchMinFraction),
+                        max(0, rightLimit - leftLimit - t.itemSpacing - tabsWidth))
             var x = round((width - w) / 2)
-            x = min(max(x, leftLimit), rightLimit - w)
+            x = min(max(x, leftLimit), rightLimit - tabsWidth - t.itemSpacing - w)
             let search = NSRect(x: x, y: searchY, width: w, height: searchHeight)
-            // The tabs fold into the field's trailing edge and "+" snaps to it.
-            let tabs = NSRect(x: search.maxX, y: tabsY, width: 0, height: tabsHeight)
+            let tabs = NSRect(x: search.maxX + t.itemSpacing, y: tabsY, width: tabsWidth, height: tabsHeight)
+            // "+" snaps to the tab bar's trailing edge, hidden.
             let plus = NSRect(x: tabs.maxX - button, y: buttonY, width: button, height: button)
             return Frames(bar: bar, search: search, tabs: tabs, plus: plus, menu: menu)
         }

@@ -231,9 +231,11 @@ final class CheckerboardView: NSView {
 
 // MARK: - Colour
 
-/// Colours: the body is the colour (the card sets it); the hex code sits in the middle in ink that reads on it.
+/// Colours: the body is the colour (the card sets it); the hex code sits in the middle, fixed-pitch, in secondary ink
+/// that reads on the colour.
 final class ColorCardContent: CardContentView {
-    private let label = Labels.make(font: SPFont.style(.callout), color: .labelColor, lines: 2, alignment: .center)
+    private let label = Labels.make(font: .monospacedSystemFont(ofSize: SPFont.style(.callout).pointSize, weight: .regular),
+                                    color: SPColor.ink50, lines: 2, alignment: .center)
 
     required init(frame: NSRect) {
         super.init(frame: frame)
@@ -258,7 +260,8 @@ final class ColorCardContent: CardContentView {
 
 // MARK: - Files
 
-/// Files: the file's icon or Quick Look thumbnail, its name and its folder (head-truncated).
+/// Files: the file's icon or Quick Look thumbnail over its path (head-truncated); several files add "Multiple files"
+/// above the folder.
 final class FilesCardContent: CardContentView {
     private let background = FillView()
     private let icon = NSImageView()
@@ -285,7 +288,8 @@ final class FilesCardContent: CardContentView {
         } else {
             icon.image = NSWorkspace.shared.icon(for: .data)
         }
-        name.stringValue = ItemPresentation.filesTitle(item)
+        name.isHidden = item.filePaths.count <= 1
+        name.stringValue = name.isHidden ? "" : ItemPresentation.filesTitle(item)
         path.stringValue = ItemPresentation.filesPath(item)
         needsLayout = true
     }
@@ -296,7 +300,7 @@ final class FilesCardContent: CardContentView {
         let insets = SPMetrics.Cards.textInsets
         let width = max(0, bounds.width - insets.left - insets.right)
         let pathHeight = path.labelSize.height
-        let nameHeight = name.labelSize.height
+        let nameHeight = name.isHidden ? 0 : name.labelSize.height
         path.frame = NSRect(x: insets.left, y: bounds.height - insets.bottom - pathHeight, width: width, height: pathHeight)
         name.frame = NSRect(x: insets.left, y: path.frame.minY - nameHeight, width: width, height: nameHeight)
         let available = max(0, name.frame.minY - insets.top - 6)
@@ -308,7 +312,7 @@ final class FilesCardContent: CardContentView {
 
 // MARK: - Unknown
 
-/// Items of an unrecognised type: a warning symbol and the first pasteboard type.
+/// Items of an unrecognised type: a warning symbol and "Preview unavailable" (behaviour.md §2.5).
 final class UnknownCardContent: CardContentView {
     private let symbol = NSImageView()
     private let label = Labels.make(font: SPFont.style(.callout), color: .secondaryLabelColor, lines: 2, alignment: .center)
@@ -326,7 +330,7 @@ final class UnknownCardContent: CardContentView {
         symbol.image = Symbols.image("exclamationmark.triangle",
                                      config: .init(pointSize: context.metrics.unknownSymbolSize, weight: .regular))
         let text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        label.stringValue = text.isEmpty ? (item.payload.first?.reps.first?.type ?? L10n.unknown) : text
+        label.stringValue = text.isEmpty ? L10n.previewUnavailable : text
         needsLayout = true
     }
 

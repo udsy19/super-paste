@@ -35,6 +35,15 @@ final class TabBarView: FlippedView {
     private(set) var chips: [TabChipView] = []
     private(set) var entries: [TabEntry] = []
     var selected: ListScope = .history { didSet { chips.forEach { $0.isSelected = $0.entry.scope == selected } } }
+    /// Icon-only square chips, while the search field is open (ui-reference §3.4 collapsed state).
+    var isCollapsed = false {
+        didSet {
+            guard isCollapsed != oldValue else { return }
+            chips.forEach { $0.isCollapsed = isCollapsed }
+            invalidateIntrinsicContentSize()
+            needsLayout = true
+        }
+    }
 
     /// Insets of `TabBarScrollView` (6 / 7 / 6 / 7): 40 high, so chips are 28.
     static let insets = NSEdgeInsets(top: 6, left: 7, bottom: 6, right: 7)
@@ -70,6 +79,7 @@ final class TabBarView: FlippedView {
         chips = entries.map { entry in
             let chip = TabChipView(entry: entry, style: style)
             chip.bar = self
+            chip.isCollapsed = isCollapsed
             chip.isSelected = entry.scope == selected
             chip.toolTip = delegate?.tabTooltip(entry)
             content.addSubview(chip)
@@ -177,6 +187,8 @@ final class TabChipView: FillView, NSTextFieldDelegate, NSDraggingSource {
     var style: SPStyle { didSet { update() } }
     fileprivate weak var bar: TabBarView?
     var isSelected = false { didSet { update() } }
+    /// A square chip showing only the icon; the label stays in place at alpha 0.
+    var isCollapsed = false { didSet { if isCollapsed != oldValue { update(); needsLayout = true } } }
     private var isHovered = false { didSet { update() } }
     private var isPressed = false { didSet { update() } }
     private var isDropTarget = false { didSet { update() } }
@@ -213,6 +225,7 @@ final class TabChipView: FillView, NSTextFieldDelegate, NSDraggingSource {
 
     override var fittingSize: NSSize {
         let t = SPMetrics.TabBar.self
+        if isCollapsed { return NSSize(width: t.chipHeight, height: t.chipHeight) }
         return NSSize(width: t.chipIconInset + iconBox + t.chipLabelGap + labelWidth + t.chipIconInset, height: t.chipHeight)
     }
 
@@ -224,6 +237,7 @@ final class TabChipView: FillView, NSTextFieldDelegate, NSDraggingSource {
         else if isSelected || isDropTarget { fillColor = SPColor.ink10 }
         else if isHovered || editor != nil { fillColor = SPColor.ink05 }
         else { fillColor = nil }
+        label.alphaValue = isCollapsed ? 0 : 1
         if let color = entry.color {
             let glyph = SPMetrics.TabBar.pinboardGlyphSize
             let box = SPMetrics.TabBar.pinboardIconBox
@@ -245,7 +259,8 @@ final class TabChipView: FillView, NSTextFieldDelegate, NSDraggingSource {
     override func layout() {
         super.layout()
         let t = SPMetrics.TabBar.self
-        icon.frame = NSRect(x: t.chipIconInset, y: round((bounds.height - iconBox) / 2), width: iconBox, height: iconBox)
+        let iconX = isCollapsed ? round((bounds.width - iconBox) / 2) : t.chipIconInset
+        icon.frame = NSRect(x: iconX, y: round((bounds.height - iconBox) / 2), width: iconBox, height: iconBox)
         let labelHeight = label.labelSize.height
         let labelFrame = NSRect(x: icon.frame.maxX + t.chipLabelGap, y: round((bounds.height - labelHeight) / 2),
                                 width: max(0, bounds.width - icon.frame.maxX - t.chipLabelGap - t.chipIconInset),

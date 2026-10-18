@@ -216,8 +216,9 @@ final class CardHeaderView: FlippedView, NSTextFieldDelegate {
         dateLabel.font = layout.dateFont
         dateLabel.textColor = layout.dateColor
         let date = ItemPresentation.date(item)
+        dateLabel.isHidden = !ItemPresentation.showsDate(item)
         dateLabel.stringValue = CardDateText.text(for: date, now: context.now, compact: layout.isCompact)
-        toolTip = CardDateText.tooltip(for: date)
+        toolTip = dateLabel.isHidden ? nil : CardDateText.tooltip(for: date)
         needsLayout = true
     }
 
@@ -240,9 +241,12 @@ final class CardHeaderView: FlippedView, NSTextFieldDelegate {
 
         let labelsMaxX = bounds.maxX + l.labelsTrailing
         let titleSize = titleLabel.labelSize
-        let dateSize = dateLabel.labelSize
+        let dateSize = dateLabel.isHidden ? .zero : dateLabel.labelSize
         let available = max(0, labelsMaxX - l.labelsLeading)
-        if l.labelsVertical {
+        if dateLabel.isHidden {
+            titleLabel.frame = NSRect(x: l.labelsLeading, y: round(midY - titleSize.height / 2),
+                                      width: min(titleSize.width, available), height: titleSize.height)
+        } else if l.labelsVertical {
             let total = titleSize.height + l.labelsSpacing + dateSize.height
             let top = round(midY - total / 2)
             titleLabel.frame = NSRect(x: l.labelsLeading, y: top, width: min(titleSize.width, available), height: titleSize.height)
@@ -314,10 +318,11 @@ final class CardHeaderView: FlippedView, NSTextFieldDelegate {
 
 // MARK: - Badges
 
-/// A frosted capsule label: the image size pill (ui-reference §4.5).
+/// A frosted capsule label: the image size pill (ui-reference §4.5). It is always dark with light text, whatever
+/// the picture or the appearance, so it reads on any image.
 final class PillLabel: FlippedView {
     private let backdrop = BackdropView(frame: .zero)
-    private let label = Labels.make(font: SPFont.style(.callout), color: SPColor.ink50)
+    private let label = Labels.make(font: SPFont.style(.callout), color: SPColor.ink85)
 
     var text: String {
         get { label.stringValue }
@@ -326,6 +331,7 @@ final class PillLabel: FlippedView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        appearance = NSAppearance(named: .darkAqua)
         backdrop.cornerRadius = SPMetrics.Cards.badgeCornerRadius
         addSubview(backdrop)
         addSubview(label)

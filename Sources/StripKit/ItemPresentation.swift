@@ -61,6 +61,9 @@ enum ItemPresentation {
     /// The date the card shows: when it entered the history, else when it was created.
     static func date(_ item: ClipItem) -> Date { item.copiedAt ?? item.createdAt }
 
+    /// Whether the header shows a date: items created straight into a pinboard (pinned-only) show their title alone.
+    static func showsDate(_ item: ClipItem) -> Bool { item.copiedAt != nil }
+
     /// Colour items: "#RRGGBB".
     static func colorHex(_ item: ClipItem) -> String? { TextClassifier.colorHex(in: item.text) }
 
@@ -89,11 +92,13 @@ enum ItemPresentation {
         return FileManager.default.displayName(atPath: path)
     }
 
-    /// Files: the folder path shown under the name (head-truncated on the card).
+    /// Files: the path label (head-truncated on the card). One file shows its whole path, "Documents/website/backup.zip";
+    /// several show their folder. Paths inside the home folder lose the "~/" prefix.
     static func filesPath(_ item: ClipItem) -> String {
         guard let first = item.filePaths.first else { return "" }
-        let folder = (first as NSString).deletingLastPathComponent
-        return (folder as NSString).abbreviatingWithTildeInPath
+        let path = item.filePaths.count == 1 ? first : (first as NSString).deletingLastPathComponent
+        let abbreviated = (path as NSString).abbreviatingWithTildeInPath
+        return abbreviated.hasPrefix("~/") ? String(abbreviated.dropFirst(2)) : abbreviated
     }
 
     /// A one-line summary for menus, the Paste Stack and tooltips.

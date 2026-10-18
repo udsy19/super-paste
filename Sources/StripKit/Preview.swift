@@ -875,12 +875,15 @@ final class FilesPreviewBody: PreviewBody {
         let bytes = item.filePaths.reduce(Int64(0)) { total, path in
             total + ((try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0)
         }
-        let size = Labels.make(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file), font: SPFont.style(.body),
-                               color: SPColor.ink50)
+        // "Documents/website/backup.zip · 12.4 MB": the path (head-truncated) and the size.
+        let path = ItemPresentation.filesPath(item)
+        let size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        let label = Labels.make(path.isEmpty ? size : "\(path) · \(size)", font: SPFont.style(.body), color: SPColor.ink50,
+                                truncation: .byTruncatingHead)
         let reveal = ToolbarButton(size: .regular, style: style, title: L10n.revealInFinder)
         let urls = item.filePaths.map { URL(fileURLWithPath: $0) }
         reveal.action = { _ in NSWorkspace.shared.activateFileViewerSelecting(urls) }
-        return ([size], [reveal])
+        return ([label], [reveal])
     }
 }
 

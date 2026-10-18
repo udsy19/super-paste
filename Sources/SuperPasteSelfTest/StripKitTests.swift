@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import Combine
 import SwiftUI
 import SuperPasteCore
+import SettingsKit
 @testable import StripKit
 
 // Owned by StripKit. Pure logic (layout math, selection, key and mouse mapping, dates, header colours, suggestions) and
@@ -244,6 +245,15 @@ private func stripPresentation() {
     check(ItemPresentation.displayHost(ItemPresentation.linkURL(link)) == "airbnb.com", "host without www")
     check(ItemPresentation.linkTitle(link) == "airbnb.com", "untitled link shows its host")
     check(ItemPresentation.filesTitle(ClipItem(kind: .files, filePaths: ["/x/a.txt", "/x/b.txt"])) == "Multiple files", "files title")
+    let home = NSHomeDirectory()
+    check(ItemPresentation.filesPath(ClipItem(kind: .files, filePaths: ["\(home)/Documents/website/backup.zip"]))
+          == "Documents/website/backup.zip", "one file: its path with the name, without ~/")
+    check(ItemPresentation.filesPath(ClipItem(kind: .files, filePaths: ["\(home)/Documents/a.txt", "\(home)/Documents/b.txt"]))
+          == "Documents", "several files: the folder")
+    check(ItemPresentation.filesPath(ClipItem(kind: .files, filePaths: ["/Volumes/Disk/x.txt"])) == "/Volumes/Disk/x.txt",
+          "paths outside the home folder stay absolute")
+    check(ItemPresentation.showsDate(ClipItem(copiedAt: Date(), kind: .text)), "history items show their date")
+    check(!ItemPresentation.showsDate(ClipItem(copiedAt: nil, kind: .text)), "pinned-only items show the title alone")
     check(ItemPresentation.colorHex(ClipItem(kind: .color, text: "#ff8800")) == "#FF8800", "colour hex")
     check(L10n.characters(1) == "1 character" && L10n.characters(1200) == "\(1200.formatted()) characters", "character count")
     let counts = ItemPresentation.textCounts("Hello world\nsecond line")
@@ -387,6 +397,24 @@ private func stripSuggestions() {
     check(strip.items.isEmpty && strip.root?.emptyLabel.stringValue == "Nothing found", "nothing found")
     strip.perform(.cancel)
     check(strip.query.isEmpty && strip.items.count == 30, "Esc clears the search")
+    // While searching the tabs collapse to icon-only chips after the field and "+" folds away (§3.1, §3.4).
+    if let toolbar = strip.toolbar {
+        let expanded = toolbar.tabBar.contentWidth
+        toolbar.setSearchActive(true, animated: false)
+        toolbar.layoutSubtreeIfNeeded()
+        let chips = toolbar.tabBar.chips
+        check(toolbar.tabBar.isCollapsed && chips.allSatisfy { $0.fittingSize.width == SPMetrics.TabBar.chipHeight },
+              "collapsed tabs are 28 pt squares")
+        check(toolbar.tabBar.contentWidth < expanded && toolbar.tabBar.frame.width > 0,
+              "the tab bar keeps its place, narrower: \(toolbar.tabBar.contentWidth) < \(expanded), frame \(toolbar.tabBar.frame), toolbar \(toolbar.bounds)")
+        check(toolbar.tabBar.frame.minX == toolbar.search.frame.maxX + SPMetrics.Toolbar.itemSpacing, "tabs follow the field")
+        check(toolbar.search.frame.width >= SPMetrics.Toolbar.activeSearchMinWidth, "the field is at least 400 wide")
+        check(toolbar.plusButton.alphaValue == 0 && toolbar.plusButton.frame.maxX == toolbar.tabBar.frame.maxX, "+ snaps to the tabs, hidden")
+        toolbar.setSearchActive(false, animated: false)
+        toolbar.layoutSubtreeIfNeeded()
+        check(!toolbar.tabBar.isCollapsed && toolbar.tabBar.contentWidth == expanded && toolbar.plusButton.alphaValue == 1,
+              "closing the search restores the tabs: \(toolbar.tabBar.contentWidth) == \(expanded), alpha \(toolbar.plusButton.alphaValue)")
+    }
     check(strip.showInTargets(for: store.item(texts[1].id)!) == [.pinboard(work.id)], "Show in the item's pinboard")
 
     // Context menu, per ui-reference §4.8.
@@ -490,6 +518,23 @@ private func stripSuggestions() {
     }
     check(rendered > 0, "renders the strip offscreen")
     guard directory != nil else { return }
+
+    // Further along the history (files, colour, unknown cards) and the seeded Welcome pinboard.
+    for (name, setup) in [("strip-glass-light-332-page2", { (strip: StripController) in strip.cards?.scrollToReveal(9, animated: false) }),
+                          ("strip-glass-light-332-welcome", { (strip: StripController) in
+                              if let board = WelcomeContent.seedIfNeeded() { strip.setScope(.pinboard(board.id)) }
+                          })] {
+        let strip = StripController(style: .glass)
+        strip.loadViewsIfNeeded()
+        strip.panel?.appearance = NSAppearance(named: .aqua)
+        strip.layoutForFrame(NSRect(x: 0, y: 0, width: 1440, height: 332))
+        strip.reload(keepSelection: false)
+        setup(strip)
+        strip.cards?.tile()
+        strip.root?.layoutSubtreeIfNeeded()
+        if let content = strip.panel?.contentView { _ = write(content, name, wallpaper: true) }
+    }
+    Defaults.reset(.welcomePinboardID)
 
     // Paused: the notification bar's pause item.
     let savedClipboard = Services.clipboard

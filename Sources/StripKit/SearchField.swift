@@ -259,7 +259,8 @@ final class SearchTextView: NSTextView {
         isAutomaticTextReplacementEnabled = false
         isContinuousSpellCheckingEnabled = false
         isGrammarCheckingEnabled = false
-        focusRingType = .none
+        // The focus ring is the field's capsule, not the text view's rectangle (`focusRingMaskBounds` below).
+        focusRingType = .exterior
         setAccessibilityLabel(L10n.search)
         setAccessibilityPlaceholderValue(L10n.search)
     }
@@ -269,6 +270,19 @@ final class SearchTextView: NSTextView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// The field's capsule, in this view's coordinates: the ring hugs the whole search field.
+    private var fieldPath: (bounds: NSRect, path: NSBezierPath)? {
+        guard let field else { return nil }
+        let rect = convert(field.bounds, from: field)
+        return (rect, NSBezierPath(roundedRect: rect, xRadius: field.cornerRadius, yRadius: field.cornerRadius))
+    }
+
+    override var focusRingMaskBounds: NSRect { fieldPath?.bounds ?? bounds }
+
+    override func drawFocusRingMask() {
+        if let fieldPath { fieldPath.path.fill() } else { bounds.fill() }
+    }
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
