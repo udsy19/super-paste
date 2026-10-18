@@ -3,6 +3,33 @@
 All notable changes to Super Paste are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- Double-clicking a card (and Return) pastes again. The ⌘V was typed while the strip was still sliding away and
+  still the key window, so the strip swallowed it. A paste now waits until the strip is off screen and keyboard
+  focus is back with the app, then types ⌘V at the HID event tap with only ⌘ held.
+- Typing into the search field. The strip is made key with `makeKeyAndOrderFront` and, should AppKit refuse to
+  make an inactive app's panel key, Super Paste comes forward instead and takes the typing. A click on the magnifier
+  opens the field (the icon no longer eats the click), the first click on a card counts even before the panel is
+  key, and on macOS 26 the glass's content view always spans the slab so every card and button is clickable.
+- ⌘V stays the app's own while a Paste Stack is open but empty: the stack only takes ⌘V while it holds a snippet
+  and gives it back when the last one is pasted, deleted or the stack closes. ⌘C is never registered globally.
+
+### Changed
+- Keep History defaults to Forever: what you copy stays until you delete it. Installs still on the old 30-day
+  default move to Forever once (a limit you chose yourself stays). Pinned items were, and are, never pruned.
+- The Paste Stack explains itself when empty ("Copy several things, then paste them in order with ⌘V."), ends
+  itself after its last snippet is pasted, closes with Esc once clicked, and is listed as "Paste Stack" with a line
+  about what it does in Settings › Shortcuts.
+- "Copied" toasts say "Press ⌘V to paste" when the content went to the clipboard instead of into the app.
+
+### Added
+- A hot corner: rest the pointer in the bottom-left corner (Settings › General lets you pick another corner or turn
+  it off) and a small peek of your three latest items slides out; click it to open Super Paste. The peek never
+  takes focus, stays while you hover, hides 0.6 s after you move away, fades instead of sliding with Reduce
+  Motion, stays away from full-screen apps, and leaves a corner alone when macOS's own Hot Corners use it.
+
 ## [1.0.1] — 2026-10-18
 
 ### Changed

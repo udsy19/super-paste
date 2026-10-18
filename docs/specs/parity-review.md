@@ -60,6 +60,17 @@ Where the imagery and the spec disagree, the imagery wins; where the imagery is 
 | Settings window | 200 pt sidebar + 440 pt pane, 52 pt pane title, group boxes radius 12 at ink85 0.03 (spec §11) | Same | none needed. The panes differ by design: Sync, Integrations and About replace Intelligence and Subscription |
 | Settings › Shortcuts | Four recorders, Quick Paste and Plain Text modifiers, reset | Same, but nothing about a shortcut that doesn't work | Warning row under the recorder and the sidebar badge while another app holds it |
 
+## After using the installed build (1.0.1 feedback)
+
+| Element | Paste (reference + spec) | Super Paste before | Fix |
+|---|---|---|---|
+| Double click / Return pastes | The strip slides down, the item lands in the app (behaviour §3.1, §4.5) | The strip slid down, nothing was pasted: ⌘V was typed while the strip was still on screen and key, so the strip itself received it | The paste waits for the strip to be off screen (`StripPresenting.hide(then:)`), settles 50 ms, then types ⌘V at the HID tap with only ⌘ held |
+| Typing in the search field | The non-activating panel takes keyboard focus without bringing Paste forward (ui-reference §2.1) | `orderFrontRegardless` + `makeKey`; nothing to fall back on when the panel didn't become key; the magnifier image ate clicks; on macOS 26 the glass content view was never given a frame | `makeKeyAndOrderFront`, a fallback that activates Super Paste when the panel still isn't key, a click-through magnifier, `acceptsFirstMouse` on the cards, root and field, the glass content view laid out to the slab |
+| ⌘V while the Paste Stack is open and empty | Not determined [U] | Swallowed (beep): the stack held ⌘V from the moment it opened | The stack takes ⌘V only while it holds a snippet, and releases it when the last one is pasted, removed or deleted, or the stack closes |
+| Paste Stack, empty | "Empty" placeholder (ui-reference §9) | "Empty", which read as a broken window | Title, "Copy several things, then paste them in order with ⌘V." and "Copy something to start. Esc to close."; pasting the last snippet ends the stack. Settings › Shortcuts calls it "Paste Stack" with that line |
+| Keep History default | Written by onboarding; value not determined [U] | 30 days: items the user meant to keep vanished after a month | Forever by default; installs still on the untouched 30-day default migrate once (`historyRetentionUserSet`); the Keep History copy says pinned items stay whatever the limit |
+| Hot corner | None in Paste | None | Super Paste's own: the pointer resting in a corner (bottom-left by default) slides out a 220 × 70 peek of the three latest cards with the activation shortcut; a click opens the strip. Off for a corner macOS's Hot Corners already use |
+
 ## Still different, and why
 
 - **Icon and name.** Super Paste keeps its own icon, menu bar glyph and name, as agreed.
@@ -74,3 +85,6 @@ Where the imagery and the spec disagree, the imagery wins; where the imagery is 
 - **Welcome pinboard contents.** The reference's seeded links point at Paste's help site and X account and use its
   own artwork; Super Paste's point at its website and GitHub, with artwork drawn in code.
 - **Dark mode.** No dark reference imagery exists; dark values follow `ui-reference.md` §1.1.
+- **Hot corner and peek.** Paste has neither; the peek is Super Paste's own (renders `peek-light.png` /
+  `peek-dark.png`). The spec's card hover state stays as specified (none, ui-reference §4.6): pinning is reached
+  from the context menu, the preview header's Pin button and drag-and-drop onto a tab.

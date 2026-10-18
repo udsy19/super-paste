@@ -150,6 +150,9 @@ MCP `create_item`/`update_item` use the same auto-detection (text/color/link) [S
 - The reverse mapping places stored values on the same scale.
 - In onboarding, choosing unlimited shows the tooltip "Unlimited history may increase your disk space usage" [S].
 - **Pruning.** Items that are not pinned (`list == nil`) with `timestamp` older than *now − capacity* are deleted [B: predicate `%K == nil && %K < %@`; U on schedule, probably at launch, on change and periodically]. Pinned items are never pruned.
+- **Super Paste note.** The default is **Forever** (0). Installs that still hold the earlier 30-day default, never
+  having moved the slider (`historyRetentionUserSet` false), are migrated to Forever once at launch, before the
+  first prune. Pruning runs at launch and hourly, and never touches pinned items.
 - **Reducing the limit** asks: "You have items older than the new history limit. Do you want to delete these older items and apply the new limit?" — "Pinned items and Pinboards won't be deleted. This action cannot be undone." [S]
 - **Erase History…** asks "Are you sure you want to erase your Clipboard History?" with the same subtitle, and buttons Erase / Cancel. It is reachable from General settings and the Clipboard tab's context menu [S][B].
 
@@ -164,7 +167,7 @@ MCP `create_item`/`update_item` use the same auto-detection (text/color/link) [S
 
 | Setting | Label | Behaviour |
 |---|---|---|
-| `isDirectPasteEnabled` = true (default) [B] | **To active app** — "Paste selected items directly to the application you are currently using." | Write the item to the pasteboard, hide the strip, re-activate the previously frontmost app, then synthesise ⌘V. This needs Accessibility (CGEvent posting) [S][U on the mechanism]. |
+| `isDirectPasteEnabled` = true (default) [B] | **To active app** — "Paste selected items directly to the application you are currently using." | Write the item to the pasteboard, hide the strip, re-activate the previously frontmost app, then synthesise ⌘V. This needs Accessibility (CGEvent posting) [S][U on the mechanism]. Super Paste: the ⌘V waits until the strip is off screen (it is the key window while it shows and would receive the keystroke itself), then for the target to be frontmost, then settles 50 ms; the keystroke uses the V key of the current layout, carries only ⌘, and is posted at the HID tap. |
 | false | **To clipboard** — "Copy selected items to the system clipboard to paste manually later." | Only write to the pasteboard. An OSD shows "Copied" [S]. |
 
 - If direct paste is on but Accessibility is not granted, the first paste shows the sheet **"Do you want to paste directly to %@?"**. Body: "Paste needs accessibility access to paste directly to other apps." Buttons: **Allow Accessibility Access** / **Not Now, Copy to Clipboard**, plus a **Do not ask again** checkbox [S].
@@ -208,6 +211,9 @@ MCP `create_item`/`update_item` use the same auto-detection (text/color/link) [S
   - The stack registers a temporary global hot key **⌘V** (`pasteStackPasteShortcut`). Each ⌘V puts the next snippet (from the top or bottom, per direction) on the pasteboard and pastes it into the frontmost app (direct paste), then removes it from the stack.
   - Rows support a swipe/row action **Delete** (`tableView:rowActionsForRow:edge:`) and Deselect All.
   - Closing the panel (×) ends stack mode and releases ⌘V.
+- **Super Paste notes.** ⌘V is taken only while the stack holds a snippet (an open, empty stack leaves ⌘V to the
+  app), pasting the last snippet ends the stack, Esc ends it once the panel was clicked, and the empty panel explains
+  itself ("Copy several things, then paste them in order with ⌘V." / "Copy something to start. Esc to close.").
 
 ## 4. The main UI: the strip panel
 
@@ -224,6 +230,13 @@ MCP `create_item`/`update_item` use the same auto-detection (text/color/link) [S
   - Opening and closing use transitions (`transitionGeneration`, `fade`, `transform`, `bounce`) [S][B].
 - **ClosedStateManager** restores state between openings: selected list (`selectedListIdentifier`) and focus [B][U].
 - **Screen sharing.** If **Show During Screen Sharing** is off, the panel's `sharingType` is set so it is hidden from screen sharing and recording. Key `isScreenSharingContentVisible`, default **true** [B][S].
+
+- **Super Paste: hot corner.** Resting the pointer for 150 ms within 2 pt of a screen corner (bottom-left by
+  default; Settings › General offers the four corners or Off) slides out a 220 × 70 peek with the three latest
+  cards and the activation shortcut; a click on it opens the strip. The peek never takes keyboard focus, stays while
+  hovered, hides 0.6 s after the pointer leaves, fades instead of sliding under Reduce Motion, doesn't show while
+  the strip is up, while a button is held or over a full-screen app, and is off for a corner macOS's own Hot
+  Corners use (`com.apple.dock wvous-*-corner`).
 
 ### 4.2 Layout (top to bottom)
 

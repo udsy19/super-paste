@@ -18,7 +18,8 @@ Sources/
   ClipboardKit/       pasteboard monitor and capture filters, classification, link previews, sounds, pasting
                       (direct paste, plain text, multi-item), Paste Stack engine
   StripKit/           the strip panel: toolbar, search field and filter suggestions, tab bar, cards, context menus,
-                      preview and editors, New Text Item window, Paste Stack panel, sidecar cards
+                      preview and editors, New Text Item window, Paste Stack panel, sidecar cards, the hot
+                      corner and its peek
   SettingsKit/        Settings window and panes, onboarding, permission screens, open at login, MCP client
                       config snippets (Integrations pane)
   SyncKit/            end-to-end-encrypted folder sync
@@ -56,7 +57,10 @@ Sources/
 2. `applicationDidFinishLaunching`: menu bar item, global shortcuts (Activate ⇧⌘V → `Services.strip.toggle()`,
    Paste Stack ⇧⌘C → `Services.pasting.togglePasteStack()`, re-registered when changed; next/previous pinboard
    ⌘→/⌘← are strip-local, read live by StripKit), `Services.clipboard.start()`, `Services.mcp.start()` when
-   `isMCPEnabled`, `Services.onboarding.show()` until completed, `Services.updates.start()`.
+   `isMCPEnabled`, `Services.onboarding.show()` until completed, `Services.updates.start()`, then
+   `StripKitModule.startHotCorner()` (global mouse monitors for the peek). Before any of this,
+   `HistoryRetention.migrateLegacyDefault()` moves an untouched 30-day Keep History to Forever so the store's first
+   prune keeps everything.
 3. Reopening the app shows the strip. `superpaste://` URLs are parsed by `AppRoute` and dispatched to the strip,
    Settings, the Accessibility screen or the login item.
 

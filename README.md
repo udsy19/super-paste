@@ -59,14 +59,17 @@ flags it in **Settings → Shortcuts**; quit the other app or record a different
 ## Features
 
 - **History.** Text, rich text, images, files, links and colours, with the app each came from. Copying the same thing
-  again moves it to the front instead of adding a duplicate. Keep History from a day up to a year, or forever;
-  pinned items are never deleted.
+  again moves it to the front instead of adding a duplicate. Everything stays until you delete it, or set Keep
+  History to a day, a week, a month or a year; pinned items are never deleted.
 - **Search.** Type anywhere in the strip. Narrow it down with filters such as `app:Safari`, `type:image`,
   `date:today`, `device:`, `pinboard:` and `title:`, or press <kbd>⌘F</kbd> for the filter browser.
 - **Pinboards.** Keep snippets, addresses and templates in coloured pinboards next to the history. Rename, recolour
   and reorder them from the tab bar.
 - **Paste Stack.** Press <kbd>⇧⌘C</kbd>, copy a few things in a row, then press <kbd>⌘V</kbd> to paste them one by one,
-  in order. Press <kbd>⇧⌘C</kbd> again to close it.
+  in order. It closes itself after the last one; <kbd>⇧⌘C</kbd> or Esc closes it early. Until it holds something,
+  <kbd>⌘V</kbd> pastes as usual.
+- **Hot corner.** Rest the pointer in the bottom-left corner of the screen and a peek of your three latest items
+  slides out; click it to open Super Paste. Pick another corner, or turn it off, in Settings › General.
 - **Preview and edit.** <kbd>Space</kbd> previews an item, <kbd>⌘E</kbd> edits text, <kbd>⌘R</kbd> gives it a title,
   <kbd>⌘N</kbd> writes a new one.
 - **Plain text.** Hold <kbd>⇧</kbd> with <kbd>Return</kbd> (or with the Quick Paste number) to paste without
