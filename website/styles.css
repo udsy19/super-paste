@@ -589,9 +589,9 @@ h3 { font-size: 18px; font-weight: 650; letter-spacing: -0.015em; }
 .peek-screen .wallpaper { opacity: 0.95; }
 .peek-screen .win { left: 18%; top: 14%; width: 60%; height: 60%; }
 .peek-screen .win .mail-body { color: #333; }
-.peek-strip { position: absolute; left: 4%; right: 4%; bottom: 3%; height: 34%; border-radius: 12px; background: linear-gradient(100deg, var(--strip-a), var(--strip-b)); box-shadow: 0 -4px 24px rgba(0,0,0,0.25); transform: translateY(115%); transition: transform 0.25s var(--ease); display: flex; align-items: center; gap: 3%; padding: 0 3%; overflow: hidden; }
+.peek-strip { position: absolute; left: 3%; right: auto; bottom: 3%; height: 34%; border-radius: 12px; background: linear-gradient(100deg, var(--strip-a), var(--strip-b)); box-shadow: 0 -4px 24px rgba(0,0,0,0.25); transform: translateY(115%); transition: transform 0.25s var(--ease); display: flex; align-items: center; gap: 3%; padding: 0 3%; overflow: hidden; }
 .peek-strip.on { transform: none; }
-.peek-strip .card { --side: 24cqw; font-size: max(calc(0.056 * var(--side)), 7px); }
+.peek-strip .card { --side: 22cqw; font-size: max(calc(0.056 * var(--side)), 7px); }
 .peek-corner { position: absolute; left: 0; bottom: 0; width: 8%; height: 8%; border-radius: 0 100% 0 0; background: radial-gradient(circle at 0 100%, color-mix(in srgb, var(--accent) 60%, transparent), transparent 70%); opacity: 0; transition: opacity 0.3s; }
 .peek-corner.on { opacity: 1; }
 .peek-screen .pointer { left: 60%; top: 40%; width: 2.2cqw; height: 3cqw; transition: left 0.9s var(--ease), top 0.9s var(--ease); }

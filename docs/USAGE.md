@@ -172,14 +172,16 @@ address from a sheet into a form; pulling quotes out of a PDF; filling fields in
    for the rest; ⇥ between fields as usual.
 4. Press **⇧⌘C** again (or close the panel) to end the stack. ⌘V is a normal paste again.
 
-The arrow at the panel's top right flips the order between top-first and bottom-first (Settings → remembered as
-Paste Stack direction). Swipe a row to delete it. Items copied into a stack are also saved to the history as usual.
+The arrow at the panel's top right flips the order between top-first and bottom-first. Swipe a row to delete it.
+While the stack is empty it explains itself and ⌘V stays the app's own; it ends itself after the last snippet is
+pasted, and Esc closes it once clicked. Items copied into a stack are also saved to the history as usual.
 
 ## Hot corner
 
-Rest the pointer in the **bottom-left corner** of the screen and a peek of your latest items rises from the edge;
-click it to open the strip, or pull the pointer away and it's gone. Settings → General → Hot corner chooses another
-corner or turns it off. If macOS already uses that corner for one of its own Hot Corners (System Settings → Desktop &
+Rest the pointer in the **bottom-left corner** of the screen and a peek of your three latest items slides out from
+the edge. It never takes focus: click it to open the strip, or move the pointer away and it hides 0.6 seconds
+later. It stays away from full-screen apps and fades instead of sliding when Reduce Motion is on. Settings → General
+→ Hot corner chooses another corner or turns it off. If macOS already uses that corner for one of its own Hot Corners (System Settings → Desktop &
 Dock → Hot Corners), Super Paste leaves it alone and says so in Settings.
 
 ## Preview, edit, rename, open, delete

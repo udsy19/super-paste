@@ -372,14 +372,14 @@ The offsite is confirmed for 12–14 November. Here's where we're staying:
         <div class="sticky reveal">
           <span class="eyebrow" style="--hdr: var(--h-pink)">Settings → General → Hot corner</span>
           <h2 id="peek-title">Or push the pointer into the corner.</h2>
-          <p class="lead">Keep a hand on the mouse? Rest the pointer in the bottom-left corner of the screen and Super Paste peeks up: your latest cards, without a shortcut. Click the peek to open the strip; pull the pointer away and it's gone.</p>
+          <p class="lead">Keep a hand on the mouse? Rest the pointer in the bottom-left corner of the screen and Super Paste peeks out: your three latest items, without a shortcut. Click the peek to open the strip; move away and it's gone a moment later.</p>
           <ul class="feature-list">
-            <li style="--hdr: var(--h-pink)"><div><b>Bottom-left by default</b><span>Choose any of the four corners, or turn it off.</span></div></li>
+            <li style="--hdr: var(--h-pink)"><div><b>Bottom-left by default</b><span>Choose any of the four corners, or turn it off. The peek never takes focus, keeps out of full-screen apps, and fades instead of sliding with Reduce Motion.</span></div></li>
             <li style="--hdr: var(--h-gray)"><div><b>Never fights macOS</b><span>If the corner already has a macOS Hot Corner action (Mission Control, a screen saver), Super Paste leaves it alone and the peek stays off until you move it.</span></div></li>
           </ul>
         </div>
         <div class="demo reveal" data-peek-demo>
-          <div class="peek-screen" role="img" aria-label="The pointer moves to the bottom-left corner and a short strip of recent cards rises from the bottom edge.">
+          <div class="peek-screen" role="img" aria-label="The pointer moves to the bottom-left corner and a peek of the three latest cards slides out from the bottom edge.">
             <svg class="wallpaper" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="1440" height="900" fill="url(#wp)"/><path d="M0 620 C 300 520, 500 760, 820 640 S 1300 520, 1440 600 V900 H0Z" fill="url(#wv1)"/><path d="M0 720 C 260 660, 560 840, 900 720 S 1250 640, 1440 700 V900 H0Z" fill="url(#wv2)"/></svg>
             <div class="win front" aria-hidden="true"><div class="win-bar"><div class="lights"><i></i><i></i><i></i></div><span class="win-title">Untitled</span></div><div class="mail-body">Dear Ms Ortega,
 
@@ -755,6 +755,7 @@ Thank you for your note. Our office is at</div></div>
         <details><summary>Does the MCP server expose my clipboard to the internet?</summary><div class="a"><p>No. It's off by default, binds to 127.0.0.1, rejects requests whose Host or Origin isn't local, and serves only clients you approved on the consent page. What an approved client does with what it reads (an assistant sending it to its provider, say) is up to that client; disconnect any of them in Settings → Integrations.</p></div></details>
         <details><summary>Can I keep the strip from showing while I share my screen?</summary><div class="a"><p>Yes: turn off "Show During Screen Sharing" in Settings → Privacy and the strip is excluded from screen sharing and recordings.</p></div></details>
         <details><summary>Can I change how big the cards are?</summary><div class="a"><p>Drag the strip's top edge: it goes from 252 to 412 points tall and the cards grow with it, from compact to large. Double-click the edge to return to the default height. There's also a slider in Settings → General.</p></div></details>
+        <details><summary>I double-clicked a card and nothing was pasted.</summary><div class="a"><p>Update to 1.0.2 or later: earlier builds could type ⌘V while the strip was still sliding away and swallow it. If it persists, check that Accessibility is allowed and that Paste Items is set to "To active app"; with "To clipboard", press ⌘V yourself after the strip closes.</p></div></details>
         <details><summary>Where is my data, and how do I back it up?</summary><div class="a"><p>Everything is in <code>~/Library/Application Support/Super Paste</code>: <code>clips.sqlite</code> for items and pinboards, <code>Blobs</code> for images and files. Copy the folder to back it up; Time Machine already does.</p></div></details>
         <details><summary>How is it different from Paste?</summary><div class="a"><p>Super Paste is an independent project inspired by Paste's design, rebuilt from scratch in Swift and AppKit: the strip, the cards, pinboards and the Paste Stack behave the way you'd expect if you've used Paste. It's free and open source, keeps data local with folder sync instead of iCloud, and adds an MCP server. It isn't affiliated with or endorsed by Paste or its makers.</p></div></details>
         <details><summary>Intel or Apple silicon?</summary><div class="a"><p>Both: the DMG contains a universal binary. macOS 14 Sonoma or later is required. On macOS 26 the strip uses Liquid Glass; on 14 and 15 it's a flat panel with the same layout.</p></div></details>
@@ -771,6 +772,15 @@ Thank you for your note. Our office is at</div></div>
         <p class="lead">The full history is in the <a href="https://github.com/udsy19/super-paste/blob/main/CHANGELOG.md">changelog</a>; every build is on the <a href="https://github.com/udsy19/super-paste/releases">releases page</a> with its checksum.</p>
       </div>
       <div class="releases reveal">
+        <div class="release">
+          <div class="v">1.0.2<span>18 October 2026</span></div>
+          <ul>
+            <li><b>Hot corner.</b> Rest the pointer in the bottom-left corner (or another, from Settings → General) and a peek of your three latest items slides out; click it to open Super Paste. It never takes focus, respects Reduce Motion, stays away from full-screen apps and leaves a corner alone when macOS's own Hot Corners use it.</li>
+            <li><b>Keep History defaults to Forever.</b> Installs still on the old 30-day default move to Forever once; a limit you chose yourself stays.</li>
+            <li><b>Fixed:</b> double-click and Return paste reliably again (the strip no longer swallows its own ⌘V); typing into the search field; ⌘V stays the app's own while a Paste Stack is open but empty.</li>
+            <li><b>Paste Stack</b> explains itself when empty, ends after its last snippet, and closes with Esc. "Copied" toasts say "Press ⌘V to paste" when the content went to the clipboard.</li>
+          </ul>
+        </div>
         <div class="release">
           <div class="v">1.0.1<span>18 October 2026</span></div>
           <ul>

@@ -125,9 +125,10 @@ they're exact.
 - Select several cards (<kbd>⇧</kbd>-click, <kbd>⌘</kbd>-click, <kbd>⌘A</kbd>) and paste them one after another.
 - **Paste Stack** (<kbd>⇧⌘C</kbd>): copy a few things, then each <kbd>⌘V</kbd> pastes the next one in order. Top or
   bottom first.
-- **Hot-corner peek**: rest the pointer in a screen corner (bottom-left by default) to peek at your latest items;
-  click the peek to open the strip. Off, or another corner, in Settings → General. Super Paste never takes a corner
-  macOS already uses for its own Hot Corners.
+- **Hot-corner peek**: rest the pointer in a screen corner (bottom-left by default) and a peek of your three
+  latest items slides out; click it to open the strip. It never takes focus, keeps out of full-screen apps and
+  respects Reduce Motion. Off, or another corner, in Settings → General; a corner macOS already uses for its own
+  Hot Corners is left alone.
 
 **Privacy**
 
@@ -242,9 +243,9 @@ leaves pinboards alone.
 
 ### Hot corner
 
-Rest the pointer in the bottom-left corner of the screen to peek at your latest items; click the peek to open the
-strip. Change the corner or turn it off in Settings → General. If macOS already uses that corner for one of its own
-Hot Corners, Super Paste leaves it alone and says so in Settings.
+Rest the pointer in the bottom-left corner of the screen and a peek of your three latest items slides out; click
+it to open the strip, or move away and it hides a moment later. Change the corner or turn it off in Settings →
+General. If macOS already uses that corner for one of its own Hot Corners, Super Paste leaves it alone and says so.
 
 ## Privacy and security
 

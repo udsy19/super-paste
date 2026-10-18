@@ -402,7 +402,7 @@
     const demo = $("[data-peek-demo]");
     if (!demo) return;
     const strip = $("[data-peek-strip]", demo), corner = $("[data-peek-corner]", demo), pointer = $("[data-peek-pointer]", demo), status = $("[data-peek-status]", demo);
-    strip.innerHTML = ["addr", "cabin", "photo", "brand", "rebase"].map((id) => card(byId[id])).join("");
+    strip.innerHTML = ["addr", "cabin", "photo"].map((id) => card(byId[id])).join("");
     let timers = [];
     const at = (ms, fn) => timers.push(setTimeout(fn, reduced ? 0 : ms));
     function play() {
@@ -411,9 +411,9 @@
       status.textContent = "Move the pointer into the corner…";
       at(600, () => { pointer.style.left = "0.5%"; pointer.style.top = "95%"; });
       at(1600, () => { corner.classList.add("on"); status.textContent = "Resting in the bottom-left corner."; });
-      at(1900, () => { strip.classList.add("on"); status.textContent = "The peek rises: your latest cards, no shortcut."; });
+      at(1900, () => { strip.classList.add("on"); status.textContent = "The peek slides out: your three latest items, no shortcut."; });
       at(4200, () => { pointer.style.left = "55%"; pointer.style.top = "45%"; });
-      at(4700, () => { strip.classList.remove("on"); corner.classList.remove("on"); status.textContent = "Pull away and it's gone. Replay to see it again."; });
+      at(5300, () => { strip.classList.remove("on"); corner.classList.remove("on"); status.textContent = "Move away and it's gone 0.6 s later. Replay to see it again."; });
     }
     $("[data-peek-replay]", demo).addEventListener("click", play);
     if (reduced) { strip.classList.add("on"); corner.classList.add("on"); pointer.style.left = "0.5%"; pointer.style.top = "95%"; status.textContent = "The pointer rests in the corner and the peek shows."; }
