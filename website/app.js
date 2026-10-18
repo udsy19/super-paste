@@ -115,7 +115,7 @@
     es.forEach((e) => { if (e.isIntersecting) {
       navLinks.forEach((a) => a.removeAttribute("aria-current"));
       const a = navLinks.find((l) => l.getAttribute("href") === "#" + e.target.id);
-      if (a) { a.setAttribute("aria-current", "true"); a.scrollIntoView({ block: "nearest", inline: "center", behavior: reduced ? "auto" : "smooth" }); }
+      if (a) a.setAttribute("aria-current", "true");
     } });
   }, { rootMargin: "-40% 0px -55% 0px" });
   sections.forEach((s) => navIO.observe(s));
