@@ -86,7 +86,7 @@ final class ClientRegistry {
     /// A hand-made client with a static bearer token; the token is returned once.
     func addTokenClient(name: String) -> (MCPClientInfo, String) {
         let token = MCPSecrets.generate()
-        let info = MCPClientInfo(name: name, kind: .custom, connection: .token)
+        let info = MCPClientInfo(name: name, connection: .token)
         clients.append(StoredClient(info: info, tokenHash: MCPSecrets.hash(token)))
         saveClients()
         return (info, token)
@@ -99,11 +99,10 @@ final class ClientRegistry {
         if let index = clients.firstIndex(where: { $0.oauthClientID == registration.clientID }) {
             clients[index].tokenHash = MCPSecrets.hash(token)
             clients[index].info.name = registration.name
-            clients[index].info.kind = MCPClientKind(clientName: registration.name)
             saveClients()
             return (clients[index].info, token)
         }
-        let info = MCPClientInfo(name: registration.name, kind: MCPClientKind(clientName: registration.name), connection: .oauth)
+        let info = MCPClientInfo(name: registration.name, connection: .oauth)
         clients.append(StoredClient(info: info, tokenHash: MCPSecrets.hash(token), oauthClientID: registration.clientID))
         saveClients()
         return (info, token)
@@ -191,21 +190,5 @@ final class ClientRegistry {
         } catch {
             Log.mcp.error("Couldn't save \(file.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
-    }
-}
-
-extension MCPClientKind {
-    /// The kind of a client that registered itself, from the `client_name` it sent (behaviour.md §14.4). Clients
-    /// that aren't recognised are `.custom`.
-    package init(clientName: String) {
-        let name = clientName.lowercased().replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
-        func has(_ words: String...) -> Bool { words.contains { name.contains($0) } }
-        if has("assistant code") { self = .cliAssistant }
-        else if has("assistant") { self = .desktopAssistant }
-        else if has("codex") { self = .codex }
-        else if has("cursor") { self = .cursor }
-        else if has("visual studio code", "vs code", "vscode") { self = .vscode }
-        else if has("windsurf", "codeium") { self = .windsurf }
-        else { self = .custom }
     }
 }

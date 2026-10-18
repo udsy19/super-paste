@@ -90,7 +90,7 @@ capturing is paused.
 |---|---|
 | `Model.swift` | `ClipItem`, `ItemKind`/`ItemTypeFilter`, `BlobRef`, `PasteboardRep`/`PasteboardEntry` (stored payload), `RepData`/`EntryData` (payload with bytes), `AppRecord`, `Device`, `LinkMetadata`, `PixelSize`, `PinboardPin`, `Pinboard`, `PinboardColor`, `ListScope` |
 | `Store.swift` | `ItemStoring`, `SyncStoring`, `ClipDraft`, `InsertResult`, `StoreChange`, `StoreError`, `SyncRecord`, `SyncTombstone`, `JournalEntry` |
-| `Contracts.swift` | `ClipboardMonitoring`, `Pasting`, `StripPresenting`, `SettingsPresenting` (with `setOpenAtLogin`), `OnboardingPresenting`, `PermissionsPresenting`, `SyncServicing`, `MCPServing` (`MCPClientInfo` with its `MCPClientKind`), `Updating` and their value types |
+| `Contracts.swift` | `ClipboardMonitoring`, `Pasting`, `StripPresenting`, `SettingsPresenting` (with `setOpenAtLogin`), `OnboardingPresenting`, `PermissionsPresenting`, `SyncServicing`, `MCPServing` (`MCPClientInfo`), `Updating` and their value types |
 | `Search.swift` | `SearchQuery` (parser, canonical text, `kinds`, `dateRanges`), `DateRange` |
 | `Content.swift` | `PasteboardType` names (self-marker `org.superpaste.item-id`, banned and volatile types), `ClipChecksum`, `TextClassifier`, `Device.current` |
 | `Retention.swift` | `HistoryRetention`: Keep History slider ↔ days |

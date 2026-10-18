@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Same geometry as scripts/make-icon.swift: a white squircle with a stack of three ink cards. -->
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EFEFEF"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="12.3" stdDeviation="15.4" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect x="100.35" y="85.3" width="823.3" height="823.3" rx="185.24" fill="url(#field)" filter="url(#shadow)"/>
+  <g fill="#141414">
+    <rect x="306.18" y="451.67" width="411.65" height="246.99" rx="49.4"/>
+    <rect x="339.11" y="373.45" width="345.78" height="49.4" rx="24.7"/>
+    <rect x="372.04" y="295.24" width="279.92" height="49.4" rx="24.7"/>
+  </g>
+</svg>

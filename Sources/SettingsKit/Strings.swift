@@ -137,8 +137,10 @@ enum Strings {
         static let empty = "Nothing connected yet"
         static func lastUsed(_ when: String) -> String { "Last used \(when)" }
         static let neverUsed = "Never used"
-        /// "command-line assistant · Last used 5 minutes ago" (behaviour.md §14.4 kinds).
-        static func clientDetail(kind: String, lastUsed: String) -> String { "\(kind) · \(lastUsed)" }
+        static let signedIn = "Signed in"
+        static let tokenClient = "Token"
+        /// "Signed in · Last used 5 minutes ago".
+        static func clientDetail(connection: String, lastUsed: String) -> String { "\(connection) · \(lastUsed)" }
         static let disconnect = "Disconnect…"
         static func disconnectTitle(_ name: String) -> String { "Disconnect “\(name)”?" }
         static func disconnectText(_ name: String) -> String { "\(name) will no longer be able to access Super Paste." }

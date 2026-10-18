@@ -138,13 +138,7 @@ Details in [PRIVACY.md](PRIVACY.md).
 1. Turn on **Settings → Integrations → Enable MCP**. The server listens on `http://127.0.0.1:39725/mcp` (the port can
    be changed there).
 2. Add it to your client. Clients that sign in through the browser (OAuth) only need the URL; you approve each one on
-   Super Paste's consent page when the client opens it. For example, command-line assistant:
-
-   ```bash
-   client mcp add --transport http --scope user super-paste http://127.0.0.1:39725/mcp
-   ```
-
-   or in a JSON config:
+   Super Paste's consent page when the client opens it. Most clients take a JSON config like this:
 
    ```json
    {

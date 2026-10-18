@@ -207,48 +207,16 @@ public enum MCPConnection: String, Codable, Sendable {
     case token
 }
 
-/// Which app a client is (behaviour.md §14.4): how it was connected and what Settings calls it.
-public enum MCPClientKind: String, Codable, CaseIterable, Sendable {
-    case desktopAssistant, cliAssistant, codex, cursor, vscode, windsurf
-    /// Anything else, and every client added by hand with a token.
-    case custom
-
-    public var displayName: String {
-        switch self {
-        case .desktopAssistant: "desktop assistant app"
-        case .cliAssistant: "command-line assistant"
-        case .codex: "Codex"
-        case .cursor: "Cursor"
-        case .vscode: "VS Code"
-        case .windsurf: "Windsurf"
-        case .custom: "Custom"
-        }
-    }
-}
-
 public struct MCPClientInfo: Codable, Hashable, Sendable, Identifiable {
     public var id: UUID
+    /// The name the client registered with (or the name given to a token client).
     public var name: String
-    public var kind: MCPClientKind
     public var connection: MCPConnection
     public var createdAt: Date
     public var lastUsedAt: Date?
 
-    public init(id: UUID = UUID(), name: String, kind: MCPClientKind = .custom, connection: MCPConnection,
-                createdAt: Date = Date(), lastUsedAt: Date? = nil) {
-        self.id = id; self.name = name; self.kind = kind; self.connection = connection; self.createdAt = createdAt
-        self.lastUsedAt = lastUsedAt
-    }
-
-    private enum CodingKeys: String, CodingKey { case id, name, kind, connection, createdAt, lastUsedAt }
-
-    /// Clients saved before `kind` existed read back as `.custom`.
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(id: try c.decode(UUID.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
-                  kind: try c.decodeIfPresent(MCPClientKind.self, forKey: .kind) ?? .custom,
-                  connection: try c.decode(MCPConnection.self, forKey: .connection),
-                  createdAt: try c.decode(Date.self, forKey: .createdAt), lastUsedAt: try c.decodeIfPresent(Date.self, forKey: .lastUsedAt))
+    public init(id: UUID = UUID(), name: String, connection: MCPConnection, createdAt: Date = Date(), lastUsedAt: Date? = nil) {
+        self.id = id; self.name = name; self.connection = connection; self.createdAt = createdAt; self.lastUsedAt = lastUsedAt
     }
 }
 

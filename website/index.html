@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Super Paste, a clipboard manager for your Mac</title>
+<meta name="description" content="A free, open-source clipboard manager for macOS 14 and later: searchable history, pinboards, a Paste Stack and pasting into any app. Your history stays on your Mac.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://udsy19.github.io/super-paste/">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Super Paste">
+<meta property="og:title" content="Super Paste">
+<meta property="og:description" content="Everything you copy, one shortcut away. A free, open-source clipboard manager for your Mac.">
+<meta property="og:url" content="https://udsy19.github.io/super-paste/">
+<meta property="og:image" content="https://udsy19.github.io/super-paste/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Super Paste: everything you copy, one shortcut away. A row of clipboard cards along the bottom.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="fonts/funnel-display.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/funnel-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<script>document.documentElement.className = "js";</script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav wrap">
+  <a class="brand" href="./" aria-label="Super Paste home">
+    <img src="icon.svg" alt="" width="32" height="32">
+    <span>Super Paste</span>
+  </a>
+  <nav aria-label="Main">
+    <a class="nav-wide" href="#features">Features</a>
+    <a class="nav-wide" href="#privacy">Privacy</a>
+    <a href="https://github.com/udsy19/super-paste">GitHub</a>
+    <a class="nav-download" href="#install">Download</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero wrap" aria-labelledby="hero-title">
+    <h1 id="hero-title">Everything you copy, one shortcut away.</h1>
+    <p class="lead">A clipboard manager for your Mac that keeps what you copy and pastes it back into any app.</p>
+
+    <div class="cmd" data-cmd>
+      <code>curl -fsSL https://udsy19.github.io/super-paste/install.sh | bash</code>
+      <button class="btn btn-quiet" type="button" data-copy-cmd>Copy</button>
+    </div>
+    <p class="fine">Free and open source. macOS 14 or later, Apple silicon and Intel.</p>
+
+    <p class="try">
+      <kbd>⇧⌘V</kbd> opens it in any app. Try it here: copy anything on this page, like
+      <button class="chip" type="button" data-copy="#2D6BFF" aria-label="Copy #2D6BFF"><span class="swatch" style="--swatch:#2D6BFF"></span>#2D6BFF</button>
+      or
+      <button class="chip" type="button" data-copy="https://github.com/udsy19/super-paste" aria-label="Copy the GitHub link">github.com/udsy19/super-paste</button>
+    </p>
+  </section>
+
+  <section class="feature wrap" id="features" aria-labelledby="pinboards-title">
+    <p class="keys"><kbd>⌘←</kbd> <kbd>⌘→</kbd> <span>switch pinboards</span></p>
+    <h2 id="pinboards-title">Keep the things you paste every week.</h2>
+    <p>History holds text, links, images, files and colours, each with the app it came from, for a day, a year or forever. Pinboards keep the rest: addresses, replies, colours, commands. Give each one a name and a colour. Anything on a pinboard stays when old history is cleared.</p>
+    <div class="tabs" role="group" aria-label="Show in the strip" data-tabs>
+      <button type="button" class="tab" aria-pressed="true" data-board="clipboard">
+        <svg class="tab-clock" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.6V8l2.4 1.5"/></svg>Clipboard
+      </button>
+      <button type="button" class="tab" aria-pressed="false" data-board="travel"><span class="dot" style="--dot:#FA9214"></span>Travel</button>
+      <button type="button" class="tab" aria-pressed="false" data-board="work"><span class="dot" style="--dot:#62A9F5"></span>Work</button>
+      <button type="button" class="tab" aria-pressed="false" data-board="snippets"><span class="dot" style="--dot:#B663E0"></span>Snippets</button>
+    </div>
+    <p class="caption">Pick a pinboard to show only its items in the strip.</p>
+  </section>
+
+  <section class="feature wrap" aria-labelledby="search-title">
+    <p class="keys"><span>Type to search,</span> <kbd>⌘F</kbd> <span>for filters</span></p>
+    <h2 id="search-title">Find it by typing a few letters.</h2>
+    <p>Type as soon as the strip opens. Words match titles and content; filters narrow it down to an app, a type, a date, a device or a pinboard.</p>
+    <div class="search">
+      <label class="search-field">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75"/><path d="M10.5 10.5 14 14"/></svg>
+        <span class="visually-hidden">Search the strip</span>
+        <input type="search" id="search" placeholder="Search, or try type:link" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="tokens"><span>Try</span>
+        <button type="button" class="token" data-token="type:link">type:link</button>
+        <button type="button" class="token" data-token="app:Mail">app:Mail</button>
+        <button type="button" class="token" data-token="pinboard:travel">pinboard:travel</button>
+        <button type="button" class="token" data-token="date:today">date:today</button>
+        <button type="button" class="token" data-token="lisboa">lisboa</button>
+      </p>
+    </div>
+  </section>
+
+  <section class="feature wrap" aria-labelledby="stack-title">
+    <p class="keys"><kbd>⇧⌘C</kbd> <span>start a Paste Stack</span></p>
+    <h2 id="stack-title">Paste a list, in order.</h2>
+    <p>Press ⇧⌘C and copy a few things in a row. Each ⌘V then pastes the next one in the order you copied them, so a form or an address takes three keystrokes instead of three trips back and forth.</p>
+    <div class="stack-demo" data-stack>
+      <div class="stack-panel">
+        <p class="pane-label"><span>Paste Stack</span> <span class="pane-count" data-stack-count>Empty</span></p>
+        <ol class="stack-list" data-stack-list aria-label="Paste Stack items"></ol>
+      </div>
+      <div class="paste-target">
+        <p class="pane-label" id="target-label"><span>Delivery address</span></p>
+        <div class="target-field" role="textbox" aria-readonly="true" aria-multiline="true" aria-labelledby="target-label" data-target><span class="caret" aria-hidden="true"></span></div>
+      </div>
+    </div>
+    <div class="stack-actions">
+      <button type="button" class="btn btn-quiet" data-stack-add>Add three</button>
+      <button type="button" class="btn btn-quiet" data-stack-paste disabled>Paste next <kbd>⌘V</kbd></button>
+      <button type="button" class="btn btn-text" data-stack-reset hidden>Start over</button>
+    </div>
+  </section>
+
+  <section class="feature wrap" id="privacy" aria-labelledby="privacy-title">
+    <h2 id="privacy-title">Private by default.</h2>
+    <p class="lead">Your history lives in a database on your Mac. There’s no account, no analytics and no telemetry, and the project runs no servers.</p>
+    <p>Nothing you copy in a password manager is saved, and neither is anything an app marks as concealed or temporary. Add your own apps to ignore, or pause capturing for 15 minutes up to 8 hours.</p>
+
+    <h3>On until you switch them off</h3>
+    <dl class="facts">
+      <div><dt>Updates</dt><dd>One anonymous request to GitHub a minute after launch and every six hours after. A new version is checked against its published checksum and signature, then installed in the background.</dd></div>
+      <div><dt>Link previews</dt><dd>When you copy a link, Super Paste fetches the page’s title and icon, the same request your browser makes to open it.</dd></div>
+    </dl>
+    <h3>Off until you switch them on</h3>
+    <dl class="facts">
+      <div><dt>Folder sync</dt><dd>Keeps your Macs in step through a folder they share, in iCloud Drive, Dropbox or anywhere else. Everything is encrypted on your Mac before it’s written there.</dd></div>
+      <div><dt>MCP server</dt><dd>Lets assistant apps you approve search your history, on this Mac only. It listens on 127.0.0.1 and turns away web pages and other computers.</dd></div>
+    </dl>
+    <p class="more"><a href="https://github.com/udsy19/super-paste/blob/main/PRIVACY.md">Read the privacy policy</a></p>
+  </section>
+
+  <section class="feature install wrap" id="install" aria-labelledby="install-title">
+    <img class="install-icon" src="icon.svg" alt="" width="88" height="88">
+    <h2 id="install-title">Install it in one line.</h2>
+    <p>Paste this into Terminal. It downloads the latest release, moves it to Applications and opens it.</p>
+    <div class="cmd" data-cmd>
+      <code>curl -fsSL https://udsy19.github.io/super-paste/install.sh | bash</code>
+      <button class="btn btn-quiet" type="button" data-copy-cmd>Copy</button>
+    </div>
+    <div class="dmg">
+      <a class="btn btn-primary" href="https://github.com/udsy19/super-paste/releases/latest/download/SuperPaste.dmg">Download the DMG</a>
+      <span class="fine">Universal: Apple silicon and Intel</span>
+    </div>
+    <p>Super Paste isn’t notarized by Apple, so macOS stops the first launch of a downloaded copy. Open System Settings → Privacy &amp; Security and click <strong>Open Anyway</strong>. You do this once, and the one-line installer skips it.</p>
+    <p>On first launch, allow Accessibility when Super Paste asks, so it can paste straight into the app you’re in. Without it, items go to the clipboard and you press ⌘V yourself.</p>
+    <p class="fine">Requires macOS 14 Sonoma or later. Super Paste keeps itself up to date; switch that off in Settings → About. To remove it, run the same command with <code>-s -- --uninstall</code> after <code>bash</code>.</p>
+  </section>
+</main>
+
+<footer class="foot wrap">
+  <p class="foot-brand"><img src="icon.svg" alt="" width="20" height="20"> Super Paste</p>
+  <nav aria-label="Project">
+    <a href="https://github.com/udsy19/super-paste">GitHub</a>
+    <a href="https://github.com/udsy19/super-paste/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/udsy19/super-paste/blob/main/LICENSE">MIT License</a>
+    <a href="https://github.com/udsy19/super-paste/blob/main/PRIVACY.md">Privacy</a>
+  </nav>
+  <p class="fine">© 2026 Udaya Vijay Anand</p>
+</footer>
+
+<aside class="strip" id="strip-panel" aria-label="Clipboard demo" hidden>
+  <div class="strip-bar">
+    <p class="strip-scope"><span class="strip-mark" data-scope-mark></span><span data-scope-name>Clipboard</span><span class="strip-count" data-scope-count></span></p>
+    <p class="strip-note" data-strip-note>What you copy here stays in this tab. Nothing is saved or sent.</p>
+    <button type="button" class="strip-toggle" aria-expanded="true" aria-controls="strip-body" data-strip-toggle>
+      <span data-toggle-label>Hide</span>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5 8 10.5l4-4"/></svg>
+    </button>
+  </div>
+  <div class="strip-body" id="strip-body">
+    <div class="strip-scroll" data-strip-scroll>
+      <div class="strip-list" id="strip" role="listbox" tabindex="0" aria-orientation="horizontal" aria-label="Clipboard history. Arrow keys move, Return copies, Command 1 to 9 copies one of the first nine."></div>
+      <p class="strip-empty" data-strip-empty hidden></p>
+    </div>
+  </div>
+</aside>
+
+<div class="toast" role="status" aria-live="polite" data-toast></div>
+<p class="visually-hidden" aria-live="polite" data-live></p>
+</body>
+</html>

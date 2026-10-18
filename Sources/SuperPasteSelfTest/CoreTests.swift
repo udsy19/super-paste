@@ -55,9 +55,9 @@ private func coreModelCodable() {
     check(roundTrip(JournalEntry(sequence: 42, record: tombstone)), "journal entry")
     check(roundTrip(SearchQuery(parsing: "meeting app:Mail")), "SearchQuery")
     check(roundTrip(MCPClientInfo(name: "Editor", connection: .token)), "MCP client")
-    check(roundTrip(MCPClientInfo(name: "command-line assistant", kind: .cliAssistant, connection: .oauth, lastUsedAt: Date())), "MCP client kind")
+    check(roundTrip(MCPClientInfo(name: "Desk Assistant", connection: .oauth, lastUsedAt: Date())), "MCP client kind")
     let legacy = Data(#"{"id":"\#(UUID().uuidString)","name":"Old","connection":"token","createdAt":0}"#.utf8)
-    check((try? JSONDecoder().decode(MCPClientInfo.self, from: legacy))?.kind == .custom, "a client saved without a kind reads as custom")
+    check((try? JSONDecoder().decode(MCPClientInfo.self, from: legacy))?.name == "Old", "a saved client reads back")
     for scope in [ListScope.history, .all, .pinboard(pinboardID)] {
         check(ListScope(id: scope.id) == scope && roundTrip(scope), "ListScope \(scope.id)")
     }
