@@ -9,14 +9,14 @@ package final class Paster: Pasting {
     /// How long a paste waits for the target app to come forward, and how often it looks.
     package static let activationTimeout: TimeInterval = 1
     package static let activationCheckInterval: TimeInterval = 0.025
-    /// Lets the app's key window settle after it came forward.
+    /// Lets the target's key window settle (after it came forward, or after the strip gave focus back) before ⌘V.
     package static let activationSettle: TimeInterval = 0.05
     /// Between the writes of a sequential multi-item paste, so each ⌘V reads its own content.
     package static let stepInterval: TimeInterval = 0.2
     /// The Paste Stack's ⌘V comes back this long after a synthetic ⌘V, so it doesn't catch that one.
     package static let hotkeyResumeDelay: TimeInterval = 0.25
-    /// The "Copied" toast's hint when direct paste is on but Accessibility is missing (`general.enable-direct-paste`).
-    package static let enableDirectPasteHint = "Enable Direct Paste ›"
+    /// The "Copied" toast's hint when the content went to the clipboard instead of straight into the app.
+    package static let pasteHint = "Press ⌘V to paste"
 
     private let env: ClipboardEnvironment
     private let monitor: ClipboardMonitor
@@ -76,11 +76,19 @@ package final class Paster: Pasting {
 
     // MARK: Pasting
 
+    /// The strip goes first: while it shows it is the key window, so a ⌘V typed before it is off screen lands in the
+    /// strip instead of the app. The paste itself runs once the strip has gone (at once when it wasn't showing).
     package func paste(_ items: [ClipItem], plainText: Bool) {
         let steps = plan(items, plainText: plainText || Defaults[.isPasteAsPlainTextEnabled])
         guard !steps.isEmpty else { return env.beep() }
-        env.hideStrip()
-        deliver(steps, to: lastTarget, directly: Defaults[.isDirectPasteEnabled])
+        pasteGeneration += 1
+        let generation = pasteGeneration
+        let target = lastTarget
+        let directly = Defaults[.isDirectPasteEnabled]
+        env.hideStrip { [weak self] in
+            guard let self, generation == self.pasteGeneration else { return }
+            self.deliver(steps, to: target, directly: directly, generation: generation)
+        }
     }
 
     package func copy(_ items: [ClipItem], plainText: Bool) {
@@ -103,9 +111,7 @@ package final class Paster: Pasting {
 
     /// Direct paste types each step into `target` with ⌘V, one after another; otherwise everything goes on the
     /// pasteboard at once and "Copied" shows (behaviour.md §3.1).
-    private func deliver(_ steps: [PasteStep], to target: PasteTarget?, directly: Bool) {
-        pasteGeneration += 1
-        let generation = pasteGeneration
+    private func deliver(_ steps: [PasteStep], to target: PasteTarget?, directly: Bool, generation: Int) {
         used(steps)
         guard directly else {
             write(PastePlan.merged(steps))
@@ -121,7 +127,7 @@ package final class Paster: Pasting {
             guard let self else { return }
             Log.paste.info("The paste target didn't come forward; copied instead")
             write(PastePlan.merged(steps))
-            env.showHUD("Copied", "checkmark", nil)
+            env.showHUD("Copied", "checkmark", Self.pasteHint)
         }
     }
 
@@ -133,22 +139,26 @@ package final class Paster: Pasting {
         env.after(Self.stepInterval) { [weak self] in self?.run(steps, from: index + 1, generation: generation) }
     }
 
-    /// Brings `target` forward and runs `work` once it is frontmost (at once when it already is). Without a target,
-    /// waits for any app other than Super Paste to be in front. `otherwise` runs when that doesn't happen in time.
-    /// A newer paste cancels both.
+    /// Brings `target` forward and runs `work` once it is frontmost, after a short settle so its key window has the
+    /// focus back. Without a target, waits for any app other than Super Paste to be in front. `otherwise` runs when
+    /// that doesn't happen in time. A newer paste cancels both.
     private func whenFrontmost(_ target: PasteTarget?, generation: Int, then work: @escaping @MainActor () -> Void,
                                otherwise fail: @escaping @MainActor () -> Void) {
         let isReady = { [env] () -> Bool in
             guard let front = env.frontmostApp() else { return target == nil }
             return target.map { $0.processID == front.processID } ?? !self.isOwn(front)
         }
-        if isReady() { return work() }
+        let settled: @MainActor () -> Void = { [weak self] in
+            guard let self, generation == self.pasteGeneration else { return }
+            work()
+        }
+        if isReady() { return env.after(Self.activationSettle, settled) }
         if let target { env.activate(target) }
         var attempts = Int((Self.activationTimeout / Self.activationCheckInterval).rounded())
         func check() {
             guard generation == pasteGeneration else { return }
             if isReady() {
-                env.after(Self.activationSettle, work)
+                env.after(Self.activationSettle, settled)
             } else if attempts > 0 {
                 attempts -= 1
                 env.after(Self.activationCheckInterval, check)
@@ -162,7 +172,7 @@ package final class Paster: Pasting {
     /// Accessibility is missing: the content is on the clipboard; ask whether to enable direct paste, unless the
     /// user said not to ask again.
     private func copiedWithoutAccessibility(into target: PasteTarget?) {
-        let copied = { [env] in env.showHUD("Copied", "checkmark", Self.enableDirectPasteHint) }
+        let copied = { [env] in env.showHUD("Copied", "checkmark", Self.pasteHint) }
         if Defaults[.isDirectPastePromptSuppressed] { return copied() }
         env.askDirectPaste(target?.name) { [env] choice in
             switch choice {
@@ -192,19 +202,20 @@ package final class Paster: Pasting {
         if Defaults[.isSoundEffectsEnabled] { env.playSound(.paste) }
     }
 
-    /// Posts ⌘V; the Paste Stack's own ⌘V steps aside meanwhile so it doesn't catch it.
+    /// Posts ⌘V; the Paste Stack's own ⌘V steps aside meanwhile so it doesn't catch it, and comes back a moment
+    /// later while the stack still holds snippets.
     private func postPaste() {
         if stackHotkeyRegistered {
             env.unregisterStackHotkey()
             stackHotkeyRegistered = false
         }
         env.postPasteKeystroke()
-        guard stack.state.isActive else { return }
+        guard stackWantsHotkey else { return }
         hotkeyResumeGeneration += 1
         let generation = hotkeyResumeGeneration
         env.after(Self.hotkeyResumeDelay) { [weak self] in
             guard let self, generation == hotkeyResumeGeneration else { return }
-            registerStackHotkey()
+            syncStackHotkey()
         }
     }
 
@@ -213,40 +224,44 @@ package final class Paster: Pasting {
     package var pasteStack: PasteStackState { stack.state }
     package var pasteStackChanges: AnyPublisher<PasteStackState, Never> { stackSubject.eraseToAnyPublisher() }
 
+    /// Opens the stack. ⌘V stays the app's own until the first copy lands in it (`syncStackHotkey`).
     package func startPasteStack() {
         guard !stack.state.isActive else { return }
         stack.start(direction: Defaults[.pasteStackDirection])
-        registerStackHotkey()
+        syncStackHotkey()
         publishStack()
         Log.paste.info("Paste Stack started")
     }
 
     package func stopPasteStack() {
         guard stack.state.isActive else { return }
-        hotkeyResumeGeneration += 1
-        if stackHotkeyRegistered {
-            env.unregisterStackHotkey()
-            stackHotkeyRegistered = false
-        }
         stack.stop()
+        syncStackHotkey()
         publishStack()
         Log.paste.info("Paste Stack ended")
     }
 
     /// The Paste Stack's ⌘V: the next snippet goes into the frontmost app (the paste target when Super Paste is in
-    /// front), whatever the Paste Items setting.
+    /// front), whatever the Paste Items setting. Pasting the last snippet ends the stack.
     package func pasteNextFromStack() {
         guard stack.state.isActive else { return }
         guard let item = stack.popNext() else { return env.beep() }
+        if stack.state.items.isEmpty {
+            stack.stop()
+            Log.paste.info("Paste Stack ended: its last snippet was pasted")
+        }
+        syncStackHotkey()
         publishStack()
         let steps = plan([item], plainText: Defaults[.isPasteAsPlainTextEnabled])
         guard !steps.isEmpty else { return env.beep() }
         let front = env.frontmostApp().flatMap { isOwn($0) ? nil : $0 } ?? lastTarget
-        deliver(steps, to: front, directly: true)
+        pasteGeneration += 1
+        deliver(steps, to: front, directly: true, generation: pasteGeneration)
     }
 
     package func removeFromPasteStack(_ ids: [UUID]) {
         stack.remove(Set(ids))
+        syncStackHotkey()
         publishStack()
     }
 
@@ -256,15 +271,27 @@ package final class Paster: Pasting {
         publishStack()
     }
 
-    private func registerStackHotkey() {
-        guard stack.state.isActive, !stackHotkeyRegistered else { return }
-        stackHotkeyRegistered = env.registerStackHotkey { [weak self] in self?.pasteNextFromStack() }
-        if !stackHotkeyRegistered { Log.paste.error("⌘V is taken by another app; the Paste Stack can't use it") }
+    /// ⌘V belongs to the stack only while it is open and holds a snippet; an open, empty stack leaves ⌘V alone, so
+    /// pasting keeps working as usual (behaviour.md §3.6 note).
+    private var stackWantsHotkey: Bool { stack.state.isActive && !stack.state.items.isEmpty }
+
+    /// Registers or releases the stack's ⌘V to match `stackWantsHotkey`. Every change to the stack ends here, so a
+    /// registration can never outlive the snippets it serves.
+    private func syncStackHotkey() {
+        if stackWantsHotkey, !stackHotkeyRegistered {
+            stackHotkeyRegistered = env.registerStackHotkey { [weak self] in self?.pasteNextFromStack() }
+            if !stackHotkeyRegistered { Log.paste.error("⌘V is taken by another app; the Paste Stack can't use it") }
+        } else if !stackWantsHotkey, stackHotkeyRegistered {
+            hotkeyResumeGeneration += 1
+            env.unregisterStackHotkey()
+            stackHotkeyRegistered = false
+        }
     }
 
     private func captured(_ item: ClipItem) {
         guard stack.state.isActive else { return }
         stack.append(item)
+        syncStackHotkey()
         publishStack()
     }
 
@@ -275,6 +302,7 @@ package final class Paster: Pasting {
         case .updated, .reloaded: stack.refresh { store.item($0) }
         case .inserted, .pinboards: return
         }
+        syncStackHotkey()
         publishStack()
     }
 

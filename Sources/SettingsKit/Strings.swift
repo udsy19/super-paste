@@ -76,7 +76,8 @@ enum Strings {
 
     enum Shortcuts {
         static let activate = "Activate Super Paste"
-        static let pasteStack = "Activate Paste Stack"
+        static let pasteStack = "Paste Stack"
+        static let pasteStackInfo = "Copy several things, then paste them one by one with ⌘V."
         static let nextPinboard = "Show next Pinboard"
         static let previousPinboard = "Show previous Pinboard"
         static let quickPaste = "Quick Paste"

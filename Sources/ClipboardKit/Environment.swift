@@ -57,7 +57,8 @@ package struct ClipboardEnvironment {
     package var activate: (PasteTarget) -> Void
     /// Posts ⌘V to the frontmost app.
     package var postPasteKeystroke: () -> Void
-    package var hideStrip: () -> Void
+    /// Hides the strip and calls back once it is off screen and no longer key (at once when it isn't showing).
+    package var hideStrip: (_ completion: @escaping @MainActor () -> Void) -> Void
     package var askDirectPaste: (_ appName: String?, _ completion: @escaping @MainActor (DirectPasteChoice) -> Void) -> Void
     package var showAccessibilityAccess: () -> Void
     /// Takes over ⌘V globally for the Paste Stack; false when it couldn't be registered.
@@ -73,7 +74,7 @@ package struct ClipboardEnvironment {
                  fetchLinkPreview: @escaping (URL, @escaping @MainActor (LinkPreview?) -> Void) -> Void,
                  fileThumbnail: @escaping (URL, @escaping @MainActor (Data?) -> Void) -> Void,
                  isAccessibilityTrusted: @escaping () -> Bool, activate: @escaping (PasteTarget) -> Void,
-                 postPasteKeystroke: @escaping () -> Void, hideStrip: @escaping () -> Void,
+                 postPasteKeystroke: @escaping () -> Void, hideStrip: @escaping (@escaping @MainActor () -> Void) -> Void,
                  askDirectPaste: @escaping (String?, @escaping @MainActor (DirectPasteChoice) -> Void) -> Void,
                  showAccessibilityAccess: @escaping () -> Void,
                  registerStackHotkey: @escaping (@escaping @MainActor () -> Void) -> Bool,

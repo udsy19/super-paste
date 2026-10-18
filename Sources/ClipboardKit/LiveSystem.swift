@@ -38,7 +38,9 @@ extension ClipboardEnvironment {
             isAccessibilityTrusted: { Permissions.isAccessibilityTrusted },
             activate: Keystrokes.activate,
             postPasteKeystroke: Keystrokes.postCommandV,
-            hideStrip: { Services.strip?.hide() },
+            hideStrip: { completion in
+                if let strip = Services.strip { strip.hide(then: completion) } else { completion() }
+            },
             askDirectPaste: { name, completion in
                 guard let permissions = Services.permissions else { return completion(.copyToClipboard) }
                 permissions.requestDirectPaste(into: name, completion: completion)
@@ -87,6 +89,10 @@ enum Keystrokes {
         if !app.activate(from: .current, options: []) { app.activate() }
     }
 
+    /// Types ⌘V: a key down and up for the V key of the current layout, carrying only the Command flag (whatever
+    /// the user still holds, such as ⇧ from a plain-text paste), posted at the HID tap so it reaches the frontmost
+    /// app the way a real keystroke does. The strip must be off screen first (`Pasting.paste` waits for that), or
+    /// the keystroke lands in the strip, which is the key window while it shows.
     static func postCommandV() {
         let key = vKeyCode
         let source = CGEventSource(stateID: .combinedSessionState)
@@ -97,7 +103,7 @@ enum Keystrokes {
         for down in [true, false] {
             let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: down)
             event?.flags = flags
-            event?.post(tap: .cgSessionEventTap)
+            event?.post(tap: .cghidEventTap)
         }
     }
 }

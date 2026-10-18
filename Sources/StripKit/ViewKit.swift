@@ -80,6 +80,11 @@ final class BackdropView: NSVisualEffectView {
     }
 }
 
+/// An image that never takes clicks: they go to the view under it (a search field's magnifier, a peek's thumbnail).
+final class PassiveImageView: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 /// A flipped plain container with frame-based layout: a new size lays the subviews out again.
 class FlippedView: NSView {
     override var isFlipped: Bool { true }

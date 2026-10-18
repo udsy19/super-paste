@@ -47,7 +47,7 @@ private func environment(_ pasteboard: NSPasteboard, store: any ItemStoring, fro
         appRecord: { records.record(for: $0) }, now: now, after: { _, work in work() },
         playSound: { _ in }, showHUD: { _, _, _ in }, beep: {}, needsPasteboardAccess: { false }, showPasteboardAccess: {},
         fetchLinkPreview: { _, done in done(nil) }, fileThumbnail: { _, done in done(nil) },
-        isAccessibilityTrusted: { false }, activate: { _ in }, postPasteKeystroke: keystrokes, hideStrip: {},
+        isAccessibilityTrusted: { false }, activate: { _ in }, postPasteKeystroke: keystrokes, hideStrip: { $0() },
         askDirectPaste: { _, done in done(.copyToClipboard) }, showAccessibilityAccess: {},
         registerStackHotkey: { _ in false }, unregisterStackHotkey: {})
 }

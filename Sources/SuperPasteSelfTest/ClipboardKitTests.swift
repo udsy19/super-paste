@@ -210,7 +210,10 @@ private final class Harness {
                 self.keystrokes.append((PasteboardIO.types(on: self.pasteboard),
                                         self.pasteboard.string(forType: .string), self.hotkeyHandler != nil))
             },
-            hideStrip: { self.stripHides += 1 },
+            hideStrip: { done in
+                self.stripHides += 1
+                if self.runDelayedWorkAtOnce { done() } else { self.deferred.append(done) }
+            },
             askDirectPaste: { name, done in self.directPasteQuestions.append(name); done(self.directPasteAnswer) },
             showAccessibilityAccess: { self.accessibilityScreens += 1 },
             registerStackHotkey: { handler in
@@ -770,7 +773,7 @@ private func clipboardPaste() {
         paster.paste([beta], plainText: false)
         check(h.directPasteQuestions == ["Editor"] && h.pasteboard.string(forType: .string) == "beta" && h.keystrokes.isEmpty,
               "asks about direct paste to the target; content copied")
-        check(h.huds.last?.title == "Copied" && h.huds.last?.subtitle == Paster.enableDirectPasteHint, "Copied with the hint")
+        check(h.huds.last?.title == "Copied" && h.huds.last?.subtitle == Paster.pasteHint, "Copied, with how to paste")
         h.directPasteAnswer = .enableAccessibility
         let toasts = h.huds.count
         paster.paste([alpha], plainText: false)
@@ -779,7 +782,7 @@ private func clipboardPaste() {
         paster.paste([alpha], plainText: false)
         check(Defaults[.isDirectPastePromptSuppressed], "Do not ask again is remembered")
         paster.paste([beta], plainText: false)
-        check(h.directPasteQuestions.count == 3 && h.huds.last?.subtitle == Paster.enableDirectPasteHint, "not asked again")
+        check(h.directPasteQuestions.count == 3 && h.huds.last?.subtitle == Paster.pasteHint, "not asked again")
 
         // Direct paste.
         h.trusted = true
@@ -812,18 +815,32 @@ private func clipboardPaste() {
         h.activationWorks = false
         let typed = h.keystrokes.count
         paster.paste([beta], plainText: false)
-        check(h.keystrokes.count == typed && h.huds.last?.title == "Copied" && h.pasteboard.string(forType: .string) == "beta",
-              "activation timeout copies")
+        check(h.keystrokes.count == typed && h.huds.last?.title == "Copied" && h.huds.last?.subtitle == Paster.pasteHint
+              && h.pasteboard.string(forType: .string) == "beta", "activation timeout copies")
         h.activationWorks = true
         h.frontmost = h.editor
 
         // A newer paste cancels a sequence still in progress.
         h.runDelayedWorkAtOnce = false
         paster.paste([alpha, image, beta], plainText: false)
+        h.deferred.removeFirst()()  // the strip is gone
+        h.deferred.removeFirst()()  // settled: the first step types
         paster.paste([beta], plainText: false)
         h.flush()
         h.runDelayedWorkAtOnce = true
         check(h.keystrokes.suffix(2).map(\.text) == ["alpha", "beta"], "the old sequence stops after its first step")
+
+        // ⌘V waits for the strip to be off screen (it is the key window while it shows) and then a settle.
+        h.runDelayedWorkAtOnce = false
+        let before = h.keystrokes.count
+        paster.paste([alpha], plainText: false)
+        check(h.keystrokes.count == before && h.deferred.count == 1 && h.pasteboard.string(forType: .string) == "beta",
+              "nothing typed or written while the strip is still going")
+        h.deferred.removeFirst()()  // the strip is off screen
+        check(h.keystrokes.count == before && h.deferred.count == 1, "then the settle before ⌘V")
+        h.flush()
+        h.runDelayedWorkAtOnce = true
+        check(h.keystrokes.count == before + 1 && h.keystrokes.last?.text == "alpha", "⌘V once the strip has gone")
 
         // Copy, writers, nothing to paste.
         let hides = h.stripHides, used = h.store.used.count
@@ -870,12 +887,14 @@ private func clipboardPasteStack() {
         h.copy([textEntry("before")])
         monitor.poll()
         paster.startPasteStack()
-        check(paster.isPasteStackActive && paster.pasteStack.items.isEmpty && h.hotkeyRegistrations == 1, "open, ⌘V taken")
+        check(paster.isPasteStackActive && paster.pasteStack.items.isEmpty && h.hotkeyRegistrations == 0 && h.hotkeyHandler == nil,
+              "open and empty: ⌘V is left alone")
         for text in ["one", "two", "three"] {
             h.copy([textEntry(text)])
             monitor.poll()
         }
         check(paster.pasteStack.items.map(\.text) == ["one", "two", "three"], "each copy is appended")
+        check(h.hotkeyRegistrations == 1 && h.hotkeyHandler != nil, "the first copy takes ⌘V, once")
 
         h.hotkeyHandler?()
         check(h.keystrokes.last?.text == "one" && h.keystrokes.last?.hotkeyRegistered == false,
@@ -890,18 +909,17 @@ private func clipboardPasteStack() {
         check(h.keystrokes.last?.text == "three" && paster.pasteStack.items.map(\.text) == ["two"], "bottom: the last copy")
 
         try? h.store.delete([paster.pasteStack.items[0].id])
-        check(paster.pasteStack.items.isEmpty, "deleted items leave the stack")
-        let beeps = h.beeps
-        h.hotkeyHandler?()
-        check(h.beeps == beeps + 1 && paster.isPasteStackActive, "empty: beep, the stack stays open")
+        check(paster.pasteStack.items.isEmpty && paster.isPasteStackActive && h.hotkeyHandler == nil,
+              "deleting the last item leaves the stack open and releases ⌘V")
 
         h.copy([textEntry("four")])
         monitor.poll()
+        check(h.hotkeyHandler != nil, "a new copy takes ⌘V again")
         paster.removeFromPasteStack(paster.pasteStack.items.map(\.id))
-        check(paster.pasteStack.items.isEmpty, "remove")
+        check(paster.pasteStack.items.isEmpty && h.hotkeyHandler == nil, "remove releases ⌘V")
 
         paster.togglePasteStack()
-        check(!paster.isPasteStackActive && h.hotkeyHandler == nil, "closing releases ⌘V")
+        check(!paster.isPasteStackActive && h.hotkeyHandler == nil, "closing")
         h.copy([textEntry("five")])
         monitor.poll()
         paster.pasteNextFromStack()
@@ -909,15 +927,25 @@ private func clipboardPasteStack() {
         check(states.first == PasteStackState() && states.last == PasteStackState(isActive: false, items: [], direction: .bottom),
               "state changes published")
 
+        // Pasting the last snippet ends the stack, and ⌘V with it.
+        paster.startPasteStack()
+        h.copy([textEntry("last")])
+        monitor.poll()
+        check(h.hotkeyHandler != nil, "taken")
+        h.hotkeyHandler?()
+        check(h.keystrokes.last?.text == "last" && !paster.isPasteStackActive && h.hotkeyHandler == nil,
+              "the last snippet pasted: the stack ends and ⌘V is the app's again")
+
         // Without Accessibility the snippet is copied (the same question as any paste).
         h.trusted = false
         h.hotkeyAvailable = false
         paster.startPasteStack()
-        check(paster.isPasteStackActive && h.hotkeyHandler == nil, "open even when ⌘V is taken")
         h.copy([textEntry("six")])
         monitor.poll()
+        check(paster.isPasteStackActive && h.hotkeyHandler == nil, "open even when ⌘V is taken")
         paster.pasteNextFromStack()
         check(h.pasteboard.string(forType: .string) == "six" && h.directPasteQuestions.count == 1, "copied, asked")
+        check(!paster.isPasteStackActive, "ended after its only snippet")
         paster.stopPasteStack()
     }
 }

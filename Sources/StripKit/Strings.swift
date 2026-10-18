@@ -122,7 +122,8 @@ enum L10n {
 
     // Paste Stack (§3.6)
     static let pasteStack = "Paste Stack"
-    static let empty = "Empty"
+    static let pasteStackEmptyText = "Copy several things, then paste them in order with ⌘V."
+    static let pasteStackEmptyHint = "Copy something to start. Esc to close."
 
     // Notification bar (§6.3)
     static let syncing = "Syncing"

@@ -39,6 +39,11 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
     /// While > 0, the strip stays open when it loses key (alerts, menus, drags).
     var hideSuppression = 0
     private var hiding = false
+    /// Callers waiting for the panel to be off screen (`hide(then:)`): a paste types ⌘V only after that.
+    private var hideCompletions: [@MainActor () -> Void] = []
+    /// Whether `ensureKeyFocus` had to activate Super Paste for this showing; the previous app gets activation back
+    /// when the strip hides.
+    private var activatedForFocus = false
 
     init(style: SPStyle = .current) {
         self.style = style
@@ -87,6 +92,12 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
         if case .edit(let id)? = route { revealAndPreview(id, edit: true) }
     }
 
+    func hide(then completion: @escaping @MainActor () -> Void) {
+        guard isVisible || hiding else { return completion() }
+        hideCompletions.append(completion)
+        if !hiding { hide() }
+    }
+
     func hide() {
         guard isVisible, let panel, let root else { return }
         hiding = true
@@ -104,12 +115,22 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
             root.animator().setFrameOrigin(NSPoint(x: 0, y: -height))
         }, completionHandler: { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.hiding else { return }
-                self.hiding = false
-                panel.orderOut(nil)
-                self.scheduleClosedStateReset()
+                guard let self else { return }
+                if self.hiding {
+                    self.hiding = false
+                    panel.orderOut(nil)
+                    self.returnActivation()
+                    self.scheduleClosedStateReset()
+                }
+                self.flushHideCompletions()
             }
         })
+    }
+
+    private func flushHideCompletions() {
+        let waiting = hideCompletions
+        hideCompletions = []
+        waiting.forEach { $0() }
     }
 
     // MARK: Panel
@@ -165,10 +186,13 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
         cards?.reloadData()
         root.setFrameOrigin(NSPoint(x: 0, y: -height))
         panel.backgroundColor = .clear
+        // Ordered front regardless of activation, then made key: a non-activating panel takes keyboard focus
+        // without bringing Super Paste forward, so the frontmost app stays the paste target (ui-reference §2.1).
         panel.orderFrontRegardless()
-        panel.makeKey()
+        panel.makeKeyAndOrderFront(nil)
         focusCards()
         visibility.send(true)
+        ensureKeyFocus()
         beginModifierMonitoring()
         startDateTimer()
         updateSidecar()
@@ -183,6 +207,38 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
             }
         })
         if let selected = selection.lead { cards?.scrollToReveal(selected, animated: false) }
+    }
+
+    /// Typing and Return must reach the strip. If the panel didn't become key (AppKit refused it for an inactive
+    /// app), fall back to activating Super Paste and making it key the ordinary way; `Pasting` remembers the app
+    /// that was in front and brings it back for the paste.
+    private func ensureKeyFocus() {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isVisible, !self.hiding, let panel = self.panel, !panel.isKeyWindow,
+                      NSApp.keyWindow == nil else { return }
+                Log.strip.info("The strip didn't become key; activating Super Paste to take typing")
+                self.activatedForFocus = true
+                NSApp.activate(ignoringOtherApps: true)
+                panel.makeKeyAndOrderFront(nil)
+                self.focusCards()
+            }
+        }
+    }
+
+    /// After a showing that activated Super Paste: the app that was in front gets activation back (the paste target
+    /// when there is one), so the user isn't left on an app without windows.
+    private func returnActivation() {
+        guard activatedForFocus else { return }
+        activatedForFocus = false
+        guard NSApp.isActive, NSApp.keyWindow == nil else { return }
+        if let target = Services.pasting?.target, let app = NSRunningApplication(processIdentifier: target.processID),
+           !app.isTerminated {
+            NSApp.yieldActivation(to: app)
+            app.activate()
+        } else {
+            NSApp.hide(nil)
+        }
     }
 
     private func resize(to height: CGFloat, save: Bool, animated: Bool) {

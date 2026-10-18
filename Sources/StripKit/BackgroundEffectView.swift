@@ -38,11 +38,14 @@ final class BackgroundEffectView: FlippedView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    /// The content view always spans the slab, whichever view hosts it: the glass view only promises to place its
+    /// content inside the glass, and a content view left at its initial zero size would draw its subviews (views no
+    /// longer clip) but never receive their clicks.
     override func layout() {
         super.layout()
         effect?.frame = bounds
         flat.frame = bounds
-        if effect == nil { contentView.frame = flat.bounds }
+        contentView.frame = bounds
     }
 
     private static func makeGlass(cornerRadius: CGFloat, content: NSView) -> NSView? {

@@ -20,7 +20,8 @@ final class SearchFieldView: FillView, NSTextViewDelegate {
     weak var delegate: SearchFieldDelegate?
     var style: SPStyle = .current { didSet { updateLook() } }
 
-    private let magnifier = NSImageView()
+    /// Decorative: clicks on the icon fall through to the field, which opens it.
+    private let magnifier = PassiveImageView()
     private let scroll = NSScrollView()
     let textView = SearchTextView(frame: .zero)
     private let clearButton = NSButton()
@@ -130,6 +131,9 @@ final class SearchFieldView: FillView, NSTextViewDelegate {
 
     private var hasText: Bool { textView.textStorage?.length ?? 0 > 0 }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// A click anywhere on the field (the magnifier included) opens it and puts the caret in it.
     override func mouseDown(with event: NSEvent) {
         if !isActive { activate() } else { window?.makeFirstResponder(textView) }
     }

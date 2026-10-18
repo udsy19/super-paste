@@ -74,6 +74,11 @@ enum ShortcutSetting: CaseIterable {
         }
     }
 
+    /// One line under the title for a feature that isn't self-explanatory.
+    var subtitle: String? {
+        self == .pasteStack ? Strings.Shortcuts.pasteStackInfo : nil
+    }
+
     var title: String {
         switch self {
         case .activation: Strings.Shortcuts.activate

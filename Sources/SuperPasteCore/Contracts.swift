@@ -114,6 +114,9 @@ public protocol StripPresenting: AnyObject {
     /// Shows the strip on the active screen; nil restores where it was (selected list and focus).
     func show(_ route: StripRoute?)
     func hide()
+    /// Hides, then calls `completion` once the panel is off screen and has given keyboard focus back (at once when
+    /// the strip isn't showing). A paste waits for this before typing ⌘V, which would otherwise land in the strip.
+    func hide(then completion: @escaping @MainActor () -> Void)
     /// Shows when hidden, hides when shown (the activation shortcut, a status item click).
     func toggle()
 }

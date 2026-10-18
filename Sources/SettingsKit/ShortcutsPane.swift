@@ -13,7 +13,7 @@ struct ShortcutsPane: View {
             SettingsGroup {
                 ForEach(Array(ShortcutSetting.allCases.enumerated()), id: \.offset) { index, setting in
                     if index > 0 { Divider() }
-                    SettingsRow(title: setting.title) { ShortcutField(setting: setting) }
+                    SettingsRow(title: setting.title, subtitle: setting.subtitle) { ShortcutField(setting: setting) }
                     if let shortcut = Defaults[setting.key], conflicts.unavailable.contains(shortcut) {
                         HotkeyConflictRow(shortcut: shortcut)
                     }

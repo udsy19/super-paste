@@ -320,6 +320,11 @@ private func stripSuggestions() {
         check(false, "panel created")
     }
 
+    // Hidden, a paste's wait for the strip ends at once.
+    var hidden = 0
+    strip.hide { hidden += 1 }
+    check(hidden == 1, "hide(then:) calls back at once while the strip isn't showing")
+
     // Keys → selection.
     strip.perform(.move(1, extend: false))
     strip.perform(.move(1, extend: true))
@@ -441,7 +446,7 @@ private func stripSuggestions() {
     stack.update(PasteStackState(isActive: true, items: Array(texts.prefix(2)), direction: .bottom))
     check(stack.panel?.level == SPMetrics.PasteStack.windowLevel, "Paste Stack at status level")
     check(stack.panel?.frame.width == SPMetrics.PasteStack.windowSize.width, "322 wide")
-    check(stack.contentHeight(rows: 0) == stack.contentHeight(rows: 1), "an empty stack keeps one row")
+    check(stack.contentHeight(rows: 0) > stack.contentHeight(rows: 1), "an empty stack has room for its explanation")
     check(stack.contentHeight(rows: 2) - stack.contentHeight(rows: 1) == SPMetrics.PasteStack.rowHeight, "44 pt rows")
     check(stack.contentHeight(rows: 50) == SPMetrics.PasteStack.windowSize.height, "capped at 372")
     stack.update(PasteStackState(isActive: false))

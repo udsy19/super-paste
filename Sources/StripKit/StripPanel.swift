@@ -97,6 +97,9 @@ final class StripRootView: FlippedView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var acceptsFirstResponder: Bool { true }
+    /// A click counts even while the panel isn't key yet (it never activates the app, so there is no "activation
+    /// click" to swallow).
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func layout() {
         super.layout()

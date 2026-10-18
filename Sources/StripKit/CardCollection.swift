@@ -90,6 +90,8 @@ final class CardStripView: FlippedView, NSDraggingSource {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var acceptsFirstResponder: Bool { true }
+    /// The first click on a card selects it (and a double click pastes) even when the panel isn't key yet.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     var scrollView: NSScrollView? { enclosingScrollView }
     var visibleIndices: [Int] { visible.keys.sorted() }

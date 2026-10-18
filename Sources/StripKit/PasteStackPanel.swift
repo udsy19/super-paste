@@ -1,10 +1,12 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SuperPasteCore
 
 /// The Paste Stack panel (behaviour.md §3.6, ui-reference §9): shown while the stack is active. A 322 pt wide
 /// non-activating status-level panel on popover material: close (leading), "Paste Stack" (bold 13, centred),
-/// direction toggle (trailing), then 44 pt rows; "Empty" when there is nothing.
+/// direction toggle (trailing), then 44 pt rows. Empty, it explains itself instead of showing a blank box: what
+/// the stack does, and that copying something starts it. Esc (once the panel was clicked) and × end the stack.
 @MainActor
 final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableViewDelegate {
     static let shared = PasteStackPanelController()
@@ -16,7 +18,10 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
     private let closeButton = NSButton()
     private let directionButton = NSButton()
     private let titleLabel = Labels.make(L10n.pasteStack, font: .boldSystemFont(ofSize: 13), color: .labelColor, alignment: .center)
-    private let emptyLabel = Labels.make(L10n.empty, font: .systemFont(ofSize: 13), color: .tertiaryLabelColor, alignment: .center)
+    private let emptyLabel = Labels.make(L10n.pasteStackEmptyText, font: .systemFont(ofSize: 13), color: .secondaryLabelColor,
+                                         lines: 3, alignment: .center)
+    private let emptyHint = Labels.make(L10n.pasteStackEmptyHint, font: .systemFont(ofSize: 11), color: .tertiaryLabelColor,
+                                        lines: 2, alignment: .center)
 
     static let width = SPMetrics.PasteStack.windowSize.width
     static let titleTop: CGFloat = 8
@@ -34,6 +39,7 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
         self.panel = panel
         table.reloadData()
         emptyLabel.isHidden = !state.items.isEmpty
+        emptyHint.isHidden = !state.items.isEmpty
         updateDirection()
         resize(panel)
         if !panel.isVisible { panel.orderFrontRegardless() }
@@ -42,10 +48,19 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
     /// Header height: the title 8 from the top, the list 8 below it.
     private var headerHeight: CGFloat { Self.titleTop + titleLabel.labelSize.height + 8 }
 
-    /// The window follows the row count, from one row up to the storyboard's 372 pt.
+    /// The empty state's block: the explanation, the hint, and 12 pt around and between them.
+    static let emptyInset: CGFloat = 12
+    private var emptyHeight: CGFloat {
+        let width = Self.width - 2 * Self.emptyInset
+        return Self.emptyInset + Labels.height(of: emptyLabel, width: width) + 8 + Labels.height(of: emptyHint, width: width)
+            + Self.emptyInset
+    }
+
+    /// The window follows the row count, up to the storyboard's 372 pt; empty, it holds the explanation.
     func contentHeight(rows: Int) -> CGFloat {
         let p = SPMetrics.PasteStack.self
-        return min(p.windowSize.height, headerHeight + CGFloat(max(1, rows)) * p.rowHeight)
+        let body = rows == 0 ? max(p.rowHeight, emptyHeight) : CGFloat(rows) * p.rowHeight
+        return min(p.windowSize.height, headerHeight + body)
     }
 
     private func resize(_ panel: NSPanel) {
@@ -59,8 +74,9 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
 
     private func makePanel() -> NSPanel {
         let size = NSSize(width: Self.width, height: contentHeight(rows: state.items.count))
-        let panel = NSPanel(contentRect: NSRect(origin: .zero, size: size),
-                            styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
+        let panel = PasteStackPanel(contentRect: NSRect(origin: .zero, size: size),
+                                    styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
+        panel.onCancel = { Services.pasting?.stopPasteStack() }
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].forEach { panel.standardWindowButton($0)?.isHidden = true }
@@ -114,7 +130,7 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         content.scroll = scroll
-        [scroll, closeButton, titleLabel, directionButton, emptyLabel].forEach(content.addSubview)
+        [scroll, closeButton, titleLabel, directionButton, emptyLabel, emptyHint].forEach(content.addSubview)
         return panel
     }
 
@@ -128,8 +144,11 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
         directionButton.frame = NSRect(x: bounds.width - inset - side, y: closeButton.frame.minY, width: side, height: side)
         let top = titleLabel.frame.maxY + 8
         scroll?.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
-        let emptyHeight = emptyLabel.labelSize.height
-        emptyLabel.frame = NSRect(x: 0, y: bounds.height - 12 - emptyHeight, width: bounds.width, height: emptyHeight)
+        let width = bounds.width - 2 * Self.emptyInset
+        let textHeight = Labels.height(of: emptyLabel, width: width)
+        emptyLabel.frame = NSRect(x: Self.emptyInset, y: top + Self.emptyInset, width: width, height: textHeight)
+        let hintHeight = Labels.height(of: emptyHint, width: width)
+        emptyHint.frame = NSRect(x: Self.emptyInset, y: emptyLabel.frame.maxY + 8, width: width, height: hintHeight)
     }
 
     private func updateDirection() {
@@ -196,6 +215,17 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
         case .files, .image: "doc"
         case .unknown: "questionmark.circle"
         }
+    }
+}
+
+/// Esc ends the stack once the panel has keyboard focus (a click on it gives it that without activating the app).
+private final class PasteStackPanel: NSPanel {
+    var onCancel: (() -> Void)?
+
+    override func cancelOperation(_ sender: Any?) { onCancel?() }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == UInt16(kVK_Escape) { onCancel?() } else { super.keyDown(with: event) }
     }
 }
 
