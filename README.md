@@ -51,7 +51,10 @@ to remove it.
    clipboard and you press <kbd>⌘V</kbd> yourself.
 
 Click the menu bar icon to open or close the strip; right-click it (or Control- or Option-click) for the menu:
-Open Super Paste, Paste Stack, New Text Item, Pause, Settings, Getting Started, About and Quit.
+About, New Text Item, Settings, Help, Pause and Quit.
+
+If <kbd>⇧⌘V</kbd> is already taken by another app (another clipboard manager, say), Super Paste tells you once and
+flags it in **Settings → Shortcuts**; quit the other app or record a different shortcut there.
 
 ## Features
 

@@ -66,23 +66,36 @@ Sources/
 show it, and the strip's paused indicator shows its Pause submenu:
 
 ```
-Open Super Paste        ⇧⌘V   (the activation shortcut, as set)
-Paste Stack             ⇧⌘C   (ticked while open)
+About Super Paste             (Settings › About)
+─
 New Text Item           ⌘N
+Settings…               ⌘,
+─
+Help ▸                        Getting Started (onboarding again), Keyboard Shortcuts (Settings › Shortcuts),
+                              Help Center, Feature Request, Contact Support (the website and GitHub issues)
 ─
 Pause ▸                       Pause for 15m / 30m / 1h / 3h / 8h, Until I Resume ⌘T
                               (titled "Paused until HH:mm" while paused: Resume ⌘T, then the durations)
-─
-Settings…               ⌘,
-Getting Started               (onboarding again)
-About Super Paste             (Settings › About)
 ─
 Quit Super Paste        ⌘Q
 ```
 
 No Check for Updates: UpdateKit installs updates by itself. The menu bar item (shown while Show in Menu Bar is on)
-toggles the strip on a left click and opens the menu on a right, Control- or Option-click; it is dimmed while
-capturing is paused.
+toggles the strip on a left click and opens the menu on a right, Control- or Option-click; it plays a short card
+animation on every capture and is dimmed while capturing is paused.
+
+### Global shortcuts
+
+`GlobalShortcuts` (app target) registers Activate Super Paste and Activate Paste Stack through `HotkeyCenter`
+(Core, Carbon `RegisterEventHotKey`) and again whenever either setting changes. A combination another app already
+holds can't be registered: `HotkeyCenter.unavailable` lists it, the app shows a one-time alert per shortcut, retries
+every 30 s (and 1.5 s after onboarding completes), and Settings › Shortcuts shows a warning row and a sidebar badge.
+
+### Onboarding
+
+Introduction → Quick Start (Run in background, Folder sync, Activation shortcut, Clipboard history). Continue sets
+`isOnboardingCompleted`, closes the window, seeds the Welcome pinboard once (`WelcomeContent`: four notes and three
+links with drawn preview art, all pinned-only) and shows the strip on it. Permissions are asked for on demand.
 
 ## Contracts (SuperPasteCore)
 

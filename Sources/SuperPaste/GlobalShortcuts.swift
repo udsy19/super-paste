@@ -20,9 +20,20 @@ final class GlobalShortcuts {
 
     init() {
         let names: Set = [Defaults.Keys.activationShortcut.name, Defaults.Keys.pasteStackShortcut.name]
-        cancellable = Defaults.changes.filter { names.contains($0) }.sink { [weak self] _ in self?.register() }
+        cancellable = Defaults.changes.sink { [weak self] name in
+            if names.contains(name) {
+                self?.register()
+            } else if name == Defaults.Keys.isOnboardingCompleted.name {
+                // The notice waits for onboarding; once Quick Start completes and the strip is up, try again.
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.afterOnboardingDelay) {
+                    MainActor.assumeIsolated { self?.register() }
+                }
+            }
+        }
         register()
     }
+
+    static let afterOnboardingDelay: TimeInterval = 1.5
 
     private func register() {
         let center = HotkeyCenter.shared

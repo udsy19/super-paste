@@ -18,8 +18,10 @@ The first release.
 - Paste directly into the active app (with Accessibility), or to the clipboard.
 - Privacy filters: password managers and confidential or temporary content are never saved; ignore your own apps;
   pause capturing for 15 minutes to 8 hours or until you resume.
-- Menu bar item and app menu: Open Super Paste, Paste Stack, New Text Item, Pause, Settings, Getting Started, About.
-  Left click opens the strip, right-click opens the menu.
+- Menu bar item and app menu: About, New Text Item, Settings, Help, Pause, Quit. Left click opens the strip,
+  right-click opens the menu; the icon animates on every capture.
+- Onboarding (Introduction, Quick Start) ends with the strip open on a Welcome pinboard. A shortcut another app
+  holds is reported once and flagged in Settings › Shortcuts instead of failing silently.
 - Folder sync between Macs, end-to-end encrypted, through iCloud Drive, Dropbox or any folder they share.
 - A local MCP server with eleven tools for clipboard items and pinboards, OAuth sign-in with your approval, token
   clients and a bundled stdio bridge (`super-paste-mcp`).

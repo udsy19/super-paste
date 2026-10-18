@@ -535,6 +535,7 @@ private func stripSuggestions() {
         if let content = strip.panel?.contentView { _ = write(content, name, wallpaper: true) }
     }
     Defaults.reset(.welcomePinboardID)
+    Defaults.reset(.selectedListIdentifier)
 
     // Paused: the notification bar's pause item.
     let savedClipboard = Services.clipboard

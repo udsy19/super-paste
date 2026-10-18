@@ -68,9 +68,9 @@ final class TextCardContent: CardContentView {
         fade.colors = [fill.withAlphaComponent(0), fill]
         opaqueStrip.fillColor = fill
         opaqueHeight = context.sizeClass == .compact ? 0 : SPMetrics.Cards.footerOpaqueHeight
-        // Without the opaque strip (compact) the fade turns solid where the footer label starts, so text never runs
-        // under it.
-        fade.locations = opaqueHeight == 0 ? [0, 0.4] : nil
+        // Without the opaque strip (compact) the fade turns solid above the footer label, so text never shows
+        // through it.
+        fade.locations = opaqueHeight == 0 ? [0, 0.2] : nil
         footer.stringValue = L10n.characters(item.textLength)
         needsLayout = true
     }
