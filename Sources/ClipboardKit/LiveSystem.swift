@@ -35,7 +35,9 @@ extension ClipboardEnvironment {
             showPasteboardAccess: { Services.permissions?.showPasteboardAccess() },
             fetchLinkPreview: LinkPreviewFetcher.fetch,
             fileThumbnail: FileThumbnails.make,
+            reportSaveFailure: { message in Alerts.notice(SaveFailure.title, message) },
             isAccessibilityTrusted: { Permissions.isAccessibilityTrusted },
+            isSecureInputEnabled: { IsSecureEventInputEnabled() },
             activate: Keystrokes.activate,
             postPasteKeystroke: Keystrokes.postCommandV,
             hideStrip: { completion in

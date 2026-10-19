@@ -49,10 +49,16 @@ package struct ClipboardEnvironment {
     package var fetchLinkPreview: (_ url: URL, _ completion: @escaping @MainActor (LinkPreview?) -> Void) -> Void
     /// Makes a Quick Look thumbnail (PNG) of a file; calls back on the main actor.
     package var fileThumbnail: (_ url: URL, _ completion: @escaping @MainActor (Data?) -> Void) -> Void
+    /// Tells the user a copy couldn't be saved (the disk is full, the store is read-only); the monitor calls it once
+    /// per run of failures, not per copy.
+    package var reportSaveFailure: (_ message: String) -> Void
 
     // MARK: Pasting
 
     package var isAccessibilityTrusted: () -> Bool
+    /// Whether secure keyboard entry is on (a password field has focus, or an app such as a terminal keeps it on):
+    /// a synthetic ⌘V would be swallowed, so the paste stays on the clipboard with a hint.
+    package var isSecureInputEnabled: () -> Bool
     /// Asks the app to come forward; the paste then waits until it is frontmost.
     package var activate: (PasteTarget) -> Void
     /// Posts ⌘V to the frontmost app.
@@ -73,7 +79,9 @@ package struct ClipboardEnvironment {
                  showPasteboardAccess: @escaping () -> Void,
                  fetchLinkPreview: @escaping (URL, @escaping @MainActor (LinkPreview?) -> Void) -> Void,
                  fileThumbnail: @escaping (URL, @escaping @MainActor (Data?) -> Void) -> Void,
-                 isAccessibilityTrusted: @escaping () -> Bool, activate: @escaping (PasteTarget) -> Void,
+                 reportSaveFailure: @escaping (String) -> Void,
+                 isAccessibilityTrusted: @escaping () -> Bool, isSecureInputEnabled: @escaping () -> Bool,
+                 activate: @escaping (PasteTarget) -> Void,
                  postPasteKeystroke: @escaping () -> Void, hideStrip: @escaping (@escaping @MainActor () -> Void) -> Void,
                  askDirectPaste: @escaping (String?, @escaping @MainActor (DirectPasteChoice) -> Void) -> Void,
                  showAccessibilityAccess: @escaping () -> Void,
@@ -82,8 +90,9 @@ package struct ClipboardEnvironment {
         self.pasteboard = pasteboard; self.ownBundleID = ownBundleID; self.store = store; self.frontmostApp = frontmostApp
         self.appRecord = appRecord; self.now = now; self.after = after; self.playSound = playSound; self.showHUD = showHUD
         self.beep = beep; self.needsPasteboardAccess = needsPasteboardAccess; self.showPasteboardAccess = showPasteboardAccess
-        self.fetchLinkPreview = fetchLinkPreview; self.fileThumbnail = fileThumbnail
-        self.isAccessibilityTrusted = isAccessibilityTrusted; self.activate = activate
+        self.fetchLinkPreview = fetchLinkPreview; self.fileThumbnail = fileThumbnail; self.reportSaveFailure = reportSaveFailure
+        self.isAccessibilityTrusted = isAccessibilityTrusted; self.isSecureInputEnabled = isSecureInputEnabled
+        self.activate = activate
         self.postPasteKeystroke = postPasteKeystroke; self.hideStrip = hideStrip; self.askDirectPaste = askDirectPaste
         self.showAccessibilityAccess = showAccessibilityAccess; self.registerStackHotkey = registerStackHotkey
         self.unregisterStackHotkey = unregisterStackHotkey

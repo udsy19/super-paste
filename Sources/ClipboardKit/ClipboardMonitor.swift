@@ -14,6 +14,9 @@ package final class ClipboardMonitor: ClipboardMonitoring {
     package static let pollTolerance: TimeInterval = 0.025
     /// A change is read only after the pasteboard has been still this long (multi-type writes arrive in pieces).
     package static let settleDelay: TimeInterval = 0.3
+    /// An app that rewrites the pasteboard without pause never settles; after this long since the first change the
+    /// pasteboard is read as it is, so such an app can't starve capture.
+    package static let maxSettle: TimeInterval = 1.5
     /// How many of Super Paste's own recent writes are remembered (sequential pastes write several times quickly).
     static let ownWriteMemory = 16
 
@@ -22,6 +25,11 @@ package final class ClipboardMonitor: ClipboardMonitoring {
     private var pollTimer: Timer?
     private var lastChangeCount: Int?
     private var settleGeneration = 0
+    /// When the change now settling was first seen (`maxSettle`).
+    private var settleStartedAt: Date?
+    /// Whether the last save failure has been reported; cleared by the next save that works, so a disk that fills
+    /// again is reported again.
+    private var saveFailureReported = false
     private var ownWrites: [Int] = []
     private var askedForPasteboardAccess = false
     private let pauseSubject = CurrentValueSubject<PauseState, Never>(.running)
@@ -78,13 +86,19 @@ package final class ClipboardMonitor: ClipboardMonitoring {
     // MARK: Polling
 
     /// One poll: ends an expired pause, and on a new change count waits `settleDelay` (restarting on every further
-    /// change) before reading.
+    /// change, but never past `maxSettle` from the first) before reading.
     package func poll() {
-        if case .paused(let until?) = pauseState, until <= env.now() { resume() }
+        let now = env.now()
+        if case .paused(let until?) = pauseState, until <= now { resume() }
         let count = env.pasteboard.changeCount
         guard count != lastChangeCount else { return }
         lastChangeCount = count
         settleGeneration += 1
+        if let started = settleStartedAt, now.timeIntervalSince(started) >= Self.maxSettle {
+            Log.clipboard.info("The pasteboard keeps changing; reading it as it is")
+            return sync()
+        }
+        settleStartedAt = settleStartedAt ?? now
         let generation = settleGeneration
         env.after(Self.settleDelay) { [weak self] in
             guard let self, generation == settleGeneration else { return }
@@ -97,6 +111,7 @@ package final class ClipboardMonitor: ClipboardMonitoring {
         pollTimer?.invalidate()
         pollTimer = nil
         settleGeneration += 1
+        settleStartedAt = nil
     }
 
     /// Tells the monitor that Super Paste itself wrote the pasteboard, leaving it at `changeCount`: a restore, not a copy.
@@ -110,6 +125,8 @@ package final class ClipboardMonitor: ClipboardMonitoring {
         let pasteboard = env.pasteboard
         let count = pasteboard.changeCount
         lastChangeCount = count
+        settleGeneration += 1
+        settleStartedAt = nil
         Defaults[.clipboardKitChangeToken] = count
         if ownWrites.contains(count) { return Log.clipboard.debug("Restored an item") }
         // While paused nothing is read at all.
@@ -161,12 +178,18 @@ package final class ClipboardMonitor: ClipboardMonitoring {
                               filePaths: analysis.filePaths, link: analysis.link)
         do {
             let result = try store.insert(draft)
+            saveFailureReported = false
             Log.clipboard.info("Captured a \(analysis.kind.rawValue, privacy: .public) item\(result.isNew ? "" : " (existing)", privacy: .public)")
             if Defaults[.isSoundEffectsEnabled] { env.playSound(.copy) }
             captureSubject.send(result.item)
             enricher.enrich(result.item)
         } catch {
+            // The copy itself worked (it is on the pasteboard); only its place in the history is lost, and the user
+            // hears about that once, not on every copy.
             Log.clipboard.error("Couldn't save a capture: \(error.localizedDescription, privacy: .public)")
+            guard !saveFailureReported else { return }
+            saveFailureReported = true
+            env.reportSaveFailure(SaveFailure.message(for: error))
         }
     }
 
@@ -176,5 +199,18 @@ package final class ClipboardMonitor: ClipboardMonitoring {
         askedForPasteboardAccess = true
         Log.clipboard.info("Pasteboard access is limited; asking for access")
         env.showPasteboardAccess()
+    }
+}
+
+/// What the user is told when a copy can't be saved (behaviour.md §2.11).
+package enum SaveFailure {
+    package static let title = "Super Paste can't save what you copy."
+
+    package static func message(for error: Error) -> String {
+        let common = "Copying and pasting still work, but new copies aren't being kept in your history"
+        if let storeError = error as? StoreError, storeError.isDiskFull {
+            return "The disk is full. \(common) until there is room again."
+        }
+        return "\(common): \(error.localizedDescription)"
     }
 }

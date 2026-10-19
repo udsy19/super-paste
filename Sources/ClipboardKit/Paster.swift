@@ -58,6 +58,18 @@ package final class Paster: Pasting {
             let pid = app.processIdentifier
             MainActor.assumeIsolated { self?.noteTermination(processID: pid) }
         })
+        workspaceObservers.append(NotificationCenter.default.addObserver(
+            forName: NSTextInputContext.keyboardSelectionDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.keyboardLayoutChanged() }
+        })
+    }
+
+    /// The V key may sit elsewhere on the new layout: a registered stack ⌘V moves with it.
+    package func keyboardLayoutChanged() {
+        guard stackHotkeyRegistered else { return }
+        env.unregisterStackHotkey()
+        stackHotkeyRegistered = false
+        syncStackHotkey()
     }
 
     /// An app came to the front: it becomes the paste target unless it is Super Paste.
@@ -120,6 +132,13 @@ package final class Paster: Pasting {
         guard env.isAccessibilityTrusted() else {
             write(PastePlan.merged(steps))
             return copiedWithoutAccessibility(into: target)
+        }
+        guard !env.isSecureInputEnabled() else {
+            // A password field (or a terminal with secure entry on) swallows synthetic keystrokes: the content is on
+            // the clipboard, and the user pastes it with a real ⌘V.
+            Log.paste.info("Secure keyboard entry is on; copied instead of typing ⌘V")
+            write(PastePlan.merged(steps))
+            return env.showHUD("Copied", "checkmark", Self.pasteHint)
         }
         whenFrontmost(target, generation: generation) { [weak self] in
             self?.run(steps, from: 0, generation: generation)

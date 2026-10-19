@@ -25,6 +25,10 @@ func registerClipboardKitTests() {
     SelfTest.cases.append(("ClipboardKit.enrichment", { MainActor.assumeIsolated { clipboardEnrichment() } }))
     SelfTest.cases.append(("ClipboardKit.paste", { MainActor.assumeIsolated { clipboardPaste() } }))
     SelfTest.cases.append(("ClipboardKit.pasteStack", { MainActor.assumeIsolated { clipboardPasteStack() } }))
+    SelfTest.cases.append(("ClipboardKit.chatteringPasteboard", { MainActor.assumeIsolated { clipboardChatter() } }))
+    SelfTest.cases.append(("ClipboardKit.saveFailure", { MainActor.assumeIsolated { clipboardSaveFailure() } }))
+    SelfTest.cases.append(("ClipboardKit.secureInput", { MainActor.assumeIsolated { clipboardSecureInput() } }))
+    SelfTest.cases.append(("ClipboardKit.layoutChange", { MainActor.assumeIsolated { clipboardLayoutChange() } }))
 }
 
 // MARK: - Fixtures
@@ -70,6 +74,8 @@ private final class FakeStore: ItemStoring {
     var blobs: [String: Data] = [:]
     var used: [[UUID]] = []
     var updates = 0
+    /// Every insert fails with this while set (a full disk).
+    var insertFailure: StoreError?
     let subject = PassthroughSubject<StoreChange, Never>()
 
     var all: [ClipItem] { order.compactMap { byID[$0] } }
@@ -82,6 +88,7 @@ private final class FakeStore: ItemStoring {
     var devices: [Device] { [] }
 
     func insert(_ draft: ClipDraft) throws -> InsertResult {
+        if let insertFailure { throw insertFailure }
         let checksum = draft.checksum
         if var existing = byID.values.first(where: { $0.checksum == checksum }) {
             existing.copiedAt = draft.copiedAt
@@ -180,6 +187,8 @@ private final class Harness {
     var thumbnail: Data?
     var thumbnailRequests: [URL] = []
     var trusted = false
+    var secureInput = false
+    var saveFailures: [String] = []
     var activationWorks = true
     var activations: [PasteTarget] = []
     /// What the pasteboard held each time ⌘V was posted, and whether the stack's ⌘V was registered then.
@@ -201,7 +210,8 @@ private final class Harness {
             needsPasteboardAccess: { self.needsAccess }, showPasteboardAccess: { self.accessScreens += 1 },
             fetchLinkPreview: { url, done in self.linkFetches.append(url); done(self.linkPreview) },
             fileThumbnail: { url, done in self.thumbnailRequests.append(url); done(self.thumbnail) },
-            isAccessibilityTrusted: { self.trusted },
+            reportSaveFailure: { self.saveFailures.append($0) },
+            isAccessibilityTrusted: { self.trusted }, isSecureInputEnabled: { self.secureInput },
             activate: { target in
                 self.activations.append(target)
                 if self.activationWorks { self.frontmost = target }
@@ -947,5 +957,100 @@ private func clipboardPasteStack() {
         check(h.pasteboard.string(forType: .string) == "six" && h.directPasteQuestions.count == 1, "copied, asked")
         check(!paster.isPasteStackActive, "ended after its only snippet")
         paster.stopPasteStack()
+    }
+}
+
+/// An app that rewrites the pasteboard without pause can't starve capture: after `maxSettle` it is read as it is.
+@MainActor
+private func clipboardChatter() {
+    withCleanSettings {
+        let h = Harness()
+        defer { h.finish() }
+        let monitor = ClipboardMonitor(environment: h.environment)
+        monitor.start(); monitor.stop()
+        h.runDelayedWorkAtOnce = false
+        h.copy([textEntry("tick 1")])
+        monitor.poll()
+        for i in 2...5 {
+            h.now += ClipboardMonitor.maxSettle / 4
+            h.copy([textEntry("tick \(i)")])
+            monitor.poll()
+        }
+        check(h.store.all.map(\.text) == ["tick 5"], "read once the cap is reached, with what was there then: \(h.store.all.map(\.text))")
+        h.copy([textEntry("tick 6")])
+        monitor.poll()
+        check(h.store.all.count == 1, "the next change starts a new settle")
+        h.flush()
+        check(h.store.all.map(\.text) == ["tick 6", "tick 5"], "which ends normally")
+        h.runDelayedWorkAtOnce = true
+    }
+}
+
+/// A copy that can't be saved is reported once per run of failures, in words that name a full disk.
+@MainActor
+private func clipboardSaveFailure() {
+    withCleanSettings {
+        let h = Harness()
+        defer { h.finish() }
+        let monitor = ClipboardMonitor(environment: h.environment)
+        monitor.start(); monitor.stop()
+        h.store.insertFailure = .database(StoreError.diskFullMessage)
+        for text in ["one", "two", "three"] {
+            h.copy([textEntry(text)])
+            monitor.poll()
+        }
+        check(h.store.all.isEmpty && h.saveFailures.count == 1, "three failed copies, one notice")
+        check(h.saveFailures.first?.contains("The disk is full") == true && h.saveFailures.first?.contains("still work") == true,
+              "the notice names the cause and says copying still works: \(h.saveFailures.first ?? "")")
+        check(h.sounds.isEmpty, "no copy sound for a copy that wasn't kept")
+        h.store.insertFailure = nil
+        h.copy([textEntry("four")])
+        monitor.poll()
+        check(h.store.all.map(\.text) == ["four"], "saving resumes")
+        h.store.insertFailure = .database("the file is read-only")
+        h.copy([textEntry("five")])
+        monitor.poll()
+        check(h.saveFailures.count == 2 && h.saveFailures.last?.contains("read-only") == true, "a new run of failures is reported again")
+    }
+}
+
+/// With secure keyboard entry on, a direct paste stays on the clipboard and says how to paste it.
+@MainActor
+private func clipboardSecureInput() {
+    withCleanSettings {
+        let h = Harness()
+        defer { h.finish() }
+        h.trusted = true
+        let monitor = ClipboardMonitor(environment: h.environment)
+        let paster = Paster(environment: h.environment, monitor: monitor)
+        let secret = h.store.add([textEntry("hunter2")])
+        h.secureInput = true
+        paster.paste([secret], plainText: false)
+        check(h.keystrokes.isEmpty && h.pasteboard.string(forType: .string) == "hunter2", "no ⌘V typed; the content is on the clipboard")
+        check(h.huds.last?.title == "Copied" && h.huds.last?.subtitle == Paster.pasteHint, "Copied, with how to paste")
+        h.secureInput = false
+        paster.paste([secret], plainText: false)
+        check(h.keystrokes.count == 1, "typed once secure entry is off")
+    }
+}
+
+/// A keyboard layout change moves a registered stack ⌘V to the new V key.
+@MainActor
+private func clipboardLayoutChange() {
+    withCleanSettings {
+        let h = Harness()
+        defer { h.finish() }
+        let monitor = ClipboardMonitor(environment: h.environment)
+        let paster = Paster(environment: h.environment, monitor: monitor)
+        paster.keyboardLayoutChanged()
+        check(h.hotkeyRegistrations == 0, "nothing registered, nothing to move")
+        paster.startPasteStack()
+        h.copy([textEntry("snippet")])
+        monitor.poll()
+        check(h.hotkeyRegistrations == 1, "registered for the snippet")
+        paster.keyboardLayoutChanged()
+        check(h.hotkeyRegistrations == 2 && h.hotkeyHandler != nil, "registered again on the new layout")
+        paster.stopPasteStack()
+        check(h.hotkeyHandler == nil, "released with the stack")
     }
 }

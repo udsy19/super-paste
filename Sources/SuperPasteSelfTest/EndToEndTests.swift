@@ -46,8 +46,9 @@ private func environment(_ pasteboard: NSPasteboard, store: any ItemStoring, fro
         pasteboard: pasteboard, ownBundleID: SuperPastePaths.bundleID, store: { store }, frontmostApp: { frontmost },
         appRecord: { records.record(for: $0) }, now: now, after: { _, work in work() },
         playSound: { _ in }, showHUD: { _, _, _ in }, beep: {}, needsPasteboardAccess: { false }, showPasteboardAccess: {},
-        fetchLinkPreview: { _, done in done(nil) }, fileThumbnail: { _, done in done(nil) },
-        isAccessibilityTrusted: { false }, activate: { _ in }, postPasteKeystroke: keystrokes, hideStrip: { $0() },
+        fetchLinkPreview: { _, done in done(nil) }, fileThumbnail: { _, done in done(nil) }, reportSaveFailure: { _ in },
+        isAccessibilityTrusted: { false }, isSecureInputEnabled: { false }, activate: { _ in }, postPasteKeystroke: keystrokes,
+        hideStrip: { $0() },
         askDirectPaste: { _, done in done(.copyToClipboard) }, showAccessibilityAccess: {},
         registerStackHotkey: { _ in false }, unregisterStackHotkey: {})
 }
