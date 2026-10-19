@@ -3,7 +3,7 @@
 All notable changes to Super Paste are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.0.3] — 2026-10-19
 
 ### Fixed
 - A damaged history file is never a silent fresh start. Only a file that is actually damaged is moved aside, and
