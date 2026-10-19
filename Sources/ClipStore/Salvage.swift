@@ -48,6 +48,11 @@ enum Salvage {
             // An item needs a place: the history or a pinboard.
             try db.run("DELETE FROM items WHERE copied_at IS NULL AND rid NOT IN (SELECT item FROM pins)")
             try db.run("DELETE FROM items_fts WHERE rowid NOT IN (SELECT rid FROM items)")
+            // Everything salvaged is journaled: sync sees a store that started over and ships it whole as a
+            // snapshot, instead of an empty one that would replace this Mac's log in the shared folder.
+            try db.run("INSERT OR REPLACE INTO journal (entity, id) SELECT 'pinboard', id FROM pinboards ORDER BY position")
+            try db.run("INSERT OR REPLACE INTO journal (entity, id) SELECT 'item', id FROM items ORDER BY rid")
+            try db.run("INSERT OR REPLACE INTO journal (entity, id) SELECT entity, id FROM tombstones")
         }
         result.items = (try? db.first("SELECT count(*) FROM items") { $0.int(0) }) ?? 0
         result.pinboards = (try? db.first("SELECT count(*) FROM pinboards") { $0.int(0) }) ?? 0

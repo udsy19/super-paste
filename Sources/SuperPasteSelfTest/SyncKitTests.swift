@@ -18,6 +18,7 @@ func registerSyncKitTests() {
     SelfTest.cases.append(("SyncKit.pruneStaysLocal", { MainActor.assumeIsolated { syncPruneStaysLocal() } }))
     SelfTest.cases.append(("SyncKit.compaction", { MainActor.assumeIsolated { syncCompaction() } }))
     SelfTest.cases.append(("SyncKit.filesStillArriving", { MainActor.assumeIsolated { syncArrivingFiles() } }))
+    SelfTest.cases.append(("SyncKit.pausedWhileStoreNotDurable", { MainActor.assumeIsolated { syncNotDurable() } }))
 }
 
 // MARK: - Helpers shared with MCPKitTests
@@ -51,6 +52,9 @@ func scratchFolder(_ label: String) -> URL {
 /// last-writer-wins apply with tombstones), for testing SyncKit and MCPKit without ClipStore.
 @MainActor
 final class MemoryClipStore: ItemStoring, SyncStoring {
+    /// False to stand in for a store whose file couldn't be opened (`SyncStoring.isDurable`).
+    var durable = true
+    var isDurable: Bool { durable }
     private(set) var itemsByID: [UUID: ClipItem] = [:]
     private var fullText: [UUID: String] = [:]
     private var boards: [UUID: Pinboard] = [:]
@@ -776,4 +780,32 @@ private func syncArrivingFiles() {
     try! sealedBlob.write(to: blob)
     c.pass()
     checkNow(c.store.item(picture.id) != nil && c.store.hasBlob(ClipChecksum.hex(of: image)), "applied once the blob is whole")
+}
+
+/// A store running from memory (its file couldn't be opened) never ships: an empty journal would otherwise become an
+/// empty snapshot that replaces this Mac's log in the folder.
+@MainActor
+private func syncNotDurable() {
+    let root = scratchFolder("sync-durable")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let folder = root.appendingPathComponent("Shared", isDirectory: true)
+    let a = SimulatedMac("A", stateRoot: root)
+    _ = try! a.store.insert(.text("shipped while durable"))
+    try? a.sync.enable(folder: folder)
+    a.pass()
+    let device = folder.appendingPathComponent("devices/mac-A")
+    let before = (try? FileManager.default.contentsOfDirectory(atPath: device.path)) ?? []
+    checkNow(before == ["00000001.log"], "one segment shipped: \(before)")
+
+    a.store.durable = false
+    _ = try? a.store.insert(.text("only in memory"))
+    a.pass()
+    let after = (try? FileManager.default.contentsOfDirectory(atPath: device.path)) ?? []
+    checkNow(after == before, "nothing written while the store isn't durable: \(after)")
+    if case .error(let message) = a.sync.status { checkNow(message.contains("paused"), "status says why: \(message)") } else {
+        checkNow(false, "status is the pause: \(a.sync.status)")
+    }
+    a.store.durable = true
+    a.pass()
+    checkNow(a.sync.status.isSynced, "resumes once durable again")
 }

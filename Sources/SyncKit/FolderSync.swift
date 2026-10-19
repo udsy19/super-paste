@@ -119,6 +119,10 @@ public final class FolderSync: SyncServicing {
 
     public func syncNow() {
         guard folder != nil else { statusSubject.send(.disabled); return }
+        guard syncStore.isDurable else {
+            Log.sync.error("The store isn't durable this session; sync stays put")
+            return statusSubject.send(.error(SyncError.storeNotDurable.localizedDescription))
+        }
         guard passTask == nil else { needsAnotherPass = true; return }
         passTask = Task { [weak self] in
             await self?.runPass()

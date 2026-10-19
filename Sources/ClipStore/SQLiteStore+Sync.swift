@@ -11,6 +11,11 @@ import SuperPasteCore
 // (no pin to a pinboard that exists here) whose `copiedAt` is before this Mac's Keep History cutoff: retention would
 // prune it on arrival. It comes back once another Mac copies it again (a newer `copiedAt`) or pins it.
 extension SQLiteStore {
+    var isDurable: Bool {
+        if case .inMemory? = recovery?.outcome { return false }
+        return true
+    }
+
     var journalHead: Int64 {
         reading(0) { try db.first("SELECT coalesce(max(sequence), 0) FROM journal") { $0.int64(0) } ?? 0 }
     }

@@ -699,6 +699,8 @@ private func backups(in folder: URL) -> [URL] {
         check(store.data(for: kept.payload[0].reps[0].blob)?.count == 200_000, "a salvaged item's blob file came back")
     }
     check(fm.fileExists(atPath: backup.appendingPathComponent("clips.sqlite").path), "the damaged file is kept")
+    check(store.journal(after: 0, limit: 10_000).count == items + boards && store.isDurable,
+          "everything salvaged is journaled, so sync ships it as a snapshot")
     check(recovery?.message.contains("recovered from it") == true, "the notice counts what came back")
     check((try? store.insert(text("after recovery"))) != nil, "the fresh store writes")
 }
@@ -723,6 +725,7 @@ private func backups(in folder: URL) -> [URL] {
     }
     check(backups(in: folder).isEmpty, "nothing was moved aside")
     check((try? store.insert(text("kept only for this session"))) != nil, "the session keeps working")
+    check(!store.isDurable, "and says it isn't durable (sync stays put)")
     check(recovery?.message.contains("left exactly as it is") == true, "the notice says the file is untouched")
     try! fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: database.path)
     check((try? Data(contentsOf: database)) == before, "the file's bytes are what they were")

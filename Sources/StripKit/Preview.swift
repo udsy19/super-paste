@@ -324,8 +324,12 @@ final class PreviewViewController: NSViewController, NSTextFieldDelegate {
 
     /// Cancel and Esc: with unsaved changes the user is asked, so a stray Esc never empties an editor.
     private func cancelEditing() {
-        if hasChanges, !Alerts.confirm(L10n.discardEditsTitle, info: L10n.discardEditsText, confirmTitle: L10n.discardEdits,
-                                       cancelTitle: L10n.keepEditing, destructive: true) { return }
+        if hasChanges {
+            let discard = Alerts.confirm(L10n.discardEditsTitle, info: L10n.discardEditsText, confirmTitle: L10n.discardEdits,
+                                         cancelTitle: L10n.keepEditing, destructive: true)
+            // The alert may have closed the (transient) popover under us, which saved the edit on its way out.
+            guard discard, view.window != nil, hasChanges else { return }
+        }
         setEditing(false)
     }
 

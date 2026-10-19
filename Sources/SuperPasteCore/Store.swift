@@ -193,6 +193,10 @@ public protocol ItemStoring: AnyObject {
 
 // MARK: - Sync
 
+public extension SyncStoring {
+    var isDurable: Bool { true }
+}
+
 /// A record as it travels between Macs. Items and pinboards travel whole (last writer on `updatedAt` wins);
 /// deletions travel as tombstones.
 public enum SyncRecord: Codable, Hashable, Sendable {
@@ -235,6 +239,10 @@ public struct JournalEntry: Codable, Hashable, Sendable {
 /// reads the journal, ships records and blobs, and applies what other Macs wrote.
 @MainActor
 public protocol SyncStoring: AnyObject {
+    /// False while the store holds this session's writes in memory only (its file couldn't be opened): nothing it
+    /// says is worth shipping, and a journal that starts at zero would otherwise replace this Mac's log in the
+    /// shared folder with an empty snapshot.
+    var isDurable: Bool { get }
     /// The sequence of the newest journal entry (0 when empty).
     var journalHead: Int64 { get }
     /// Local changes with `sequence > after`, oldest first; only the latest state of each record.

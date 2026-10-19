@@ -15,6 +15,8 @@ public enum SyncError: LocalizedError, Equatable {
     /// A file isn't a Super Paste sync file, or it was changed by someone without the key.
     case unreadableFile(String)
     case keychain(String)
+    /// The store holds this session's writes in memory only (`SyncStoring.isDurable`).
+    case storeNotDurable
 
     public var errorDescription: String? {
         switch self {
@@ -30,6 +32,8 @@ public enum SyncError: LocalizedError, Equatable {
             "A file in the sync folder couldn't be decrypted (\(name)). It may be damaged or changed by someone else."
         case .keychain(let why):
             "The sync key couldn't be saved in the Keychain: \(why)"
+        case .storeNotDurable:
+            "Sync is paused: the clipboard history couldn't be opened on this Mac. Nothing is sent or received until Super Paste is relaunched."
         }
     }
 }
