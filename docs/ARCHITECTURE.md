@@ -5,7 +5,9 @@ Apple frameworks only: no third-party dependencies, no Xcode project. Deployment
 app (`LSUIElement`): no Dock icon, a menu bar item, global shortcuts.
 
 The behaviour to build is specified in `docs/specs/behaviour.md`, the look in `docs/specs/ui-reference.md` and the
-wording in `docs/specs/strings.md`. Section numbers in code comments point into those files.
+wording in `docs/specs/strings.md`; what happens when things go wrong (damaged files, full disks, lost keys, files
+still arriving, edits in flight) in `docs/specs/reliability.md`. Section numbers in code comments point into those
+files.
 
 ```
 Sources/
@@ -14,7 +16,7 @@ Sources/
                       paths, typed Defaults, Keychain, shortcuts & global hotkeys, alerts/HUD, permissions, the
                       shared app menu, the app-icon header colour
   ClipStore/          SQLite store: items, pinboards, FTS5 search, content-addressed blobs, retention, undo,
-                      sync journal, damaged-store recovery
+                      sync journal, damaged-store recovery and salvage
   ClipboardKit/       pasteboard monitor and capture filters, classification, link previews, sounds, pasting
                       (direct paste, plain text, multi-item), Paste Stack engine
   StripKit/           the strip panel: toolbar, search field and filter suggestions, tab bar, cards, context menus,
@@ -50,8 +52,9 @@ Sources/
 
 `Sources/SuperPaste/main.swift`:
 
-1. `applicationWillFinishLaunching` installs modules in dependency order: ClipStore (prunes past Keep History now,
-   then hourly) → ClipboardKit → SyncKit (resumes syncing once launched) → MCPKit → UpdateKit → SettingsKit →
+1. `applicationWillFinishLaunching` first hands over to a copy of Super Paste that is already running (`SingleInstance`:
+   activate it, exit), then installs modules in dependency order: ClipStore (prunes past Keep History now, then
+   hourly) → ClipboardKit → SyncKit (resumes syncing once launched) → MCPKit → UpdateKit → SettingsKit →
    StripKit, then sets the hidden main menu (File › Close, Edit › Undo/Redo/Cut/Copy/Paste/Select All, Window ›
    Minimize, Quit) so text fields get their standard key equivalents.
 2. `applicationDidFinishLaunching`: menu bar item, global shortcuts (Activate ⇧⌘V → `Services.strip.toggle()`,
@@ -61,8 +64,11 @@ Sources/
    `StripKitModule.startHotCorner()` (global mouse monitors for the peek). Before any of this,
    `HistoryRetention.migrateLegacyDefault()` moves an untouched 30-day Keep History to Forever so the store's first
    prune keeps everything.
+   Last, a store that was damaged or couldn't be opened (`ClipStoreModule.recovery`) is explained in an alert.
 3. Reopening the app shows the strip. `superpaste://` URLs are parsed by `AppRoute` and dispatched to the strip,
    Settings, the Accessibility screen or the login item.
+4. `applicationWillTerminate` flushes the store (`ClipStoreModule.shutdown()`: the write-ahead log is folded into
+   the file) before the process ends; an update's swap helper waits for the exit.
 
 ### Menu bar item and app menu
 
@@ -117,7 +123,7 @@ links with drawn preview art, all pinned-only) and shows the strip on it. Permis
 | `AppMenu.swift` | `AppMenu` (the shared app menu and Pause submenu), `ClosureMenuItem`, `NSMenuItem.make` |
 | `AppColor.swift` | `AppColor`: built-in app colours and the header colour derived from an app icon |
 | `Services.swift` | `Services` registry, `SuperPastePaths` |
-| `System.swift` | `Log`, `Alerts`, `HUD` (the OSD toast), `NSScreen.active`, `Permissions` |
+| `System.swift` | `Log`, `Alerts`, `HUD` (the OSD toast), `SingleInstance`, `NSScreen.active`, `Permissions` |
 | `Defaults.swift`, `Keychain.swift`, `Hotkeys.swift` | typed UserDefaults, generic passwords, `Shortcut` + `HotkeyCenter` + `ShortcutRecorder` |
 
 ### Data model in short
@@ -163,7 +169,10 @@ throwaway folder and defaults suite, never the real ones; pasteboards are privat
 pasteboard, and no key event is posted. `EndToEnd.copyToMCP` runs the real modules together: copies on a private
 pasteboard are captured, searched, pasted back to another private pasteboard, pinned, pruned, synced to a second
 store through a folder and listed by an MCP client over loopback. `UpdateKit.endToEnd` runs against
-`build/Super Paste.app` when it exists (build it first with `scripts/build-app.sh`).
+`build/Super Paste.app` when it exists (build it first with `scripts/build-app.sh`). Failures are injected rather
+than hoped for: damaged database pages, a file without read permission, a page-capped database standing in for a
+full disk, an unwritable blob folder, a store that throws on insert, a chattering pasteboard on a fake clock, and
+empty or tampered sync files (`docs/specs/reliability.md` lists them with their cases).
 
 ```
 swift build                       # warning-free

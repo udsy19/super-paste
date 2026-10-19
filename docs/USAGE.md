@@ -295,6 +295,22 @@ concealed or transient (Settings → Privacy shows the two switches).
 
 **Link cards show no preview.** Generate Link Previews is off, or the page didn't offer one.
 
+**"Your clipboard history couldn't be read, so Super Paste started a fresh one."** The history file was damaged.
+Super Paste kept it, untouched, in `~/Library/Application Support/Super Paste/Backup/<date>/` and copied back
+everything it could still read (the alert says how many items and pinboards). Nothing is deleted on the way.
+
+**"Super Paste can't open your clipboard history right now."** The file is locked by another process, unreadable,
+or the disk is full or failing. It was left exactly as it is; this session keeps copies in memory only. Fix the
+cause and relaunch.
+
+**"Super Paste can't save what you copy."** The disk is full (or the history file is read-only). Copying and
+pasting keep working; new copies aren't kept until there is room. You're told once; saving resumes on its own.
+
+**Sync says a file "couldn't be decrypted".** Someone or something changed a file in the sync folder without the
+key, or the file is damaged. Nothing from it is applied; restore it (your cloud service's version history, or the
+Mac that wrote it writes a snapshot later) and sync carries on. A file that is still uploading or downloading is
+simply waited for.
+
 **The strip shows "Nothing found".** A filter can't match: check the tokens in the search field.
 
 **Logs.** Console.app, filtered by `com.udsy.superpaste`.

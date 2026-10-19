@@ -202,7 +202,7 @@ package final class ClipboardMonitor: ClipboardMonitoring {
     }
 }
 
-/// What the user is told when a copy can't be saved (behaviour.md §2.11).
+/// What the user is told when a copy can't be saved (docs/specs/reliability.md, Capture).
 package enum SaveFailure {
     package static let title = "Super Paste can't save what you copy."
 

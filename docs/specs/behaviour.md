@@ -43,7 +43,7 @@ Notes:
    - Stop shows "Diagnostic logs will be copied so you can send them to support." with "Stop and Copy Logs".
    - Logs are written to files named `paste-diagnostics-yyyy-MM-dd-HHmmss`, starting with a `--- Diagnostic Info ---` header (`App: …`, `OS: macOS … (hw.model)`).
    - Key `isDiagnosticsEnabled`, default false [S][B].
-9. **Damaged store.** If the DB cannot open: "Paste Can't Open Its Data" → "Reset Local Data". The damaged files (`db.sqlite`, `-wal`, `-shm`, `_SUPPORT`) move to a `backup` folder next to it and the app starts over [S][B].
+9. **Damaged store.** If the DB cannot open: "Paste Can't Open Its Data" → "Reset Local Data". The damaged files (`db.sqlite`, `-wal`, `-shm`, `_SUPPORT`) move to a `backup` folder next to it and the app starts over [S][B]. Super Paste goes further (docs/specs/reliability.md): only a file that is actually damaged (not SQLite, corrupt pages, a foreign schema) is moved aside, and what can still be read from it is copied into the fresh store, blob files included; a file that merely can't be opened (locked, no permission, a full disk) is left untouched and the store runs in memory for the launch. Either way nothing is deleted and the user is told after launch what happened, how much came back and where the old file is.
 
 ## 2. Clipboard monitoring (capture pipeline)
 
@@ -160,6 +160,7 @@ MCP `create_item`/`update_item` use the same auto-detection (text/color/link) [S
 
 - **Sound.** `SoundFeedback` loads `Copy.aiff` (0.21 s) and `Paste.aiff` (0.08 s). It plays Copy on capture and Paste on paste when **Sound effects** is on (`isSoundEffectsEnabled`, default **true**) [R][B].
 - **Menu bar icon.** Animates through `StatusItem/0` … `StatusItem/16` (17 frames) on capture. `StatusItem/paused` is shown while paused [R][B][U on the trigger].
+- **A copy that can't be saved** (the disk is full, the store is read-only) is reported once per run of failures, in words that name the cause and say that copying and pasting still work; the next save that works resets the notice. No sound plays for a copy that wasn't kept. Super Paste addition; docs/specs/reliability.md.
 
 ## 3. Pasting
 

@@ -3,6 +3,33 @@
 All notable changes to Super Paste are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+- A damaged history file is never a silent fresh start. Only a file that is actually damaged is moved aside, and
+  what can still be read from it (items, pinboards, the search index, blob files) is copied into the fresh store;
+  a file that merely can't be opened (locked, unreadable, a full disk) is left untouched and the session runs from
+  memory. The old fallback could delete a file it failed to move. Either way an alert says what happened, how much
+  came back and where the old file is.
+- A copy the store can't save (the disk is full, the file is read-only) is reported once, in words that name the
+  cause; it used to fail silently on every copy. Writes are fsynced on commit and the write-ahead log is folded
+  into the file on quit, before an update swaps the app.
+- An edit the store refused closed the editor and took the text with it; the editor now stays open. An item
+  deleted while it was being edited comes back as a new item instead of vanishing; closing an editor with unsaved
+  changes saves them; Cancel and Esc ask first. New Text Item keeps a draft across a quit or crash.
+- A direct paste with secure keyboard entry on (a password field, a terminal) copies and says "Press ⌘V to paste"
+  instead of typing a ⌘V that would be swallowed. The Paste Stack's ⌘V follows a keyboard layout change. An app
+  that rewrites the pasteboard without pause no longer starves capture.
+- A sync file that a cloud service has created but not yet filled is waited for rather than reported as damaged.
+  Lost-key errors say where to import the key from and that an empty folder starts over.
+- A second copy of Super Paste hands over to the running one instead of watching and writing alongside it. The
+  strip and the Paste Stack panel move back on screen when a display is removed or resized under them.
+
+### Added
+- `docs/specs/reliability.md`: every failure mode considered, what the user sees, and the self-test that injects
+  it (damaged database pages, a locked file, a full disk, an unwritable blob folder, a chattering pasteboard,
+  empty and tampered sync files).
+
 ## [1.0.2] — 2026-10-18
 
 ### Fixed
