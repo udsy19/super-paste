@@ -175,7 +175,7 @@ struct PermissionScreen: View {
                 }
             }
             Button(Strings.Permissions.issue) {
-                Dialogs.info(Strings.Permissions.issueTitle, Strings.Permissions.issueText)
+                Alerts.notice(Strings.Permissions.issueTitle, Strings.Permissions.issueText)
             }
             .buttonStyle(.link)
             .font(.sp(.callout))

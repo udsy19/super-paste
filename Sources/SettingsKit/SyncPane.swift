@@ -51,7 +51,7 @@ final class SyncModel: ObservableObject {
     func syncNow() { service?.syncNow() }
 
     func exportKey() {
-        guard let key = service?.exportKey() else { Dialogs.info(Strings.Sync.noKey); return }
+        guard let key = service?.exportKey() else { Alerts.notice(Strings.Sync.noKey); return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = Strings.Sync.keyFileName
         panel.allowedContentTypes = [.plainText]
@@ -76,7 +76,7 @@ final class SyncModel: ObservableObject {
         do {
             let text = try String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
             try service.importKey(text)
-            Dialogs.info(Strings.Sync.imported)
+            Alerts.notice(Strings.Sync.imported)
         } catch {
             Alerts.error(Strings.Sync.importFailed, error)
         }

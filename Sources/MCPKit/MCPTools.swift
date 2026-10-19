@@ -283,7 +283,8 @@ public struct MCPToolbox {
         guard try args.bool("confirm") == true else {
             let count = store.count(.empty, in: .pinboard(board.id))
             let message = "Preview — would delete pinboard \"\(board.name)\" (\(count) item\(count == 1 ? "" : "s")). "
-                + "Call again with confirm: true to delete. Pinned items stay in clipboard history."
+                + "Call again with confirm: true to delete. Items that are also in the clipboard history stay there; "
+                + "items that live only in this pinboard are deleted with it."
             return Output(["deleted": false, "pinboard": before, "message": .string(message)])
         }
         try store.deletePinboard(board.id)

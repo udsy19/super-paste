@@ -28,6 +28,15 @@ public enum Alerts {
         a.runModal()
     }
 
+    /// A plain notice with one OK button (a recovery, a key that was imported).
+    public static func notice(_ title: String, _ info: String = "") {
+        let a = NSAlert()
+        a.messageText = title
+        a.informativeText = info
+        NSApp.activate(ignoringOtherApps: true)
+        a.runModal()
+    }
+
     /// Confirmation with optional "Don't ask again" suppression (remembered in `suppressedWarnings`).
     public static func confirm(_ message: String, info: String = "", confirmTitle: String = "OK",
                                cancelTitle: String = "Cancel", destructive: Bool = false, suppressionID: String? = nil) -> Bool {
@@ -128,6 +137,27 @@ public enum HUD {
                 })
             }
         }
+    }
+}
+
+// MARK: - One instance
+
+/// Two copies of Super Paste at once would both watch the pasteboard and both write the same database (SQLite keeps
+/// the file intact, but writes would collide and every copy would be captured twice). The second copy to launch
+/// hands over to the first and quits.
+public enum SingleInstance {
+    /// Among the running apps with this bundle id, the one that isn't this process (nil: this is the only one).
+    public static func other(among running: [(pid: pid_t, isTerminated: Bool)], own: pid_t) -> pid_t? {
+        running.first { $0.pid != own && !$0.isTerminated }?.pid
+    }
+
+    /// The other running copy of this app, if any.
+    @MainActor public static func otherRunningCopy() -> NSRunningApplication? {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return nil }
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        let own = ProcessInfo.processInfo.processIdentifier
+        guard let pid = other(among: apps.map { ($0.processIdentifier, $0.isTerminated) }, own: own) else { return nil }
+        return apps.first { $0.processIdentifier == pid }
     }
 }
 

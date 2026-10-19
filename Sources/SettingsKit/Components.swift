@@ -226,14 +226,6 @@ enum Dialogs {
         return text.isEmpty ? nil : text
     }
 
-    static func info(_ title: String, _ message: String = "") {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        NSApp.activate()
-        alert.runModal()
-    }
-
     /// Writes text to the general pasteboard. A secret also gets the nspasteboard.org concealed and transient
     /// markers, so clipboard managers (Super Paste included) don't keep it.
     static func copy(_ text: String, secret: Bool) {

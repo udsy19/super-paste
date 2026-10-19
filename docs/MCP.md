@@ -237,7 +237,7 @@ board.
 | `id` | string | yes |
 | `confirm` | boolean | no |
 
-Preview: `{ "deleted": false, "pinboard": <summary>, "message": "Preview — would delete pinboard \"Work\" (12 items). Call again with confirm: true to delete. Pinned items stay in clipboard history." }`
+Preview: `{ "deleted": false, "pinboard": <summary>, "message": "Preview — would delete pinboard \"Work\" (12 items). Call again with confirm: true to delete. Items that are also in the clipboard history stay there; items that live only in this pinboard are deleted with it." }`
 
 ### add_item_to_pinboard
 

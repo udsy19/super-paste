@@ -19,6 +19,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// then the services that read and write it, the windows that show them last. URLs that launched the app are
     /// routed after this, so every service is in place for them.
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // A second copy hands over to the one already running: one watcher, one writer of the database.
+        if let other = SingleInstance.otherRunningCopy() {
+            Log.app.notice("Super Paste is already running (pid \(other.processIdentifier)); handing over and quitting")
+            other.activate()
+            exit(0)
+        }
         // Before the store's first prune: an install still on the old 30-day default keeps everything from now on.
         if HistoryRetention.migrateLegacyDefault() { Log.app.info("Keep History moved from the old 30-day default to Forever") }
         ClipStoreModule.install()
@@ -43,6 +49,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !Services.onboarding.isCompleted { Services.onboarding.show() }
         Services.updates.start()
         StripKitModule.startHotCorner()
+        // A store that was damaged or couldn't be opened is never a silent fresh start (behaviour.md §1.9).
+        if let recovery = ClipStoreModule.recovery {
+            Log.app.error("\(recovery.title, privacy: .public) \(recovery.message, privacy: .public)")
+            DispatchQueue.main.async { MainActor.assumeIsolated { Alerts.notice(recovery.title, recovery.message) } }
+        }
+    }
+
+    /// Every committed write goes into the database file before the process ends (an update's swap waits for that).
+    func applicationWillTerminate(_ notification: Notification) {
+        ClipStoreModule.shutdown()
     }
 
     /// Opening the app again (Finder, Spotlight, the Dock while installing) shows the strip (behaviour.md §1.4).

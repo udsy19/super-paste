@@ -10,6 +10,7 @@ func registerCoreTests() {
     SelfTest.cases.append(("Core.dateRanges", { coreDateRanges() }))
     SelfTest.cases.append(("Core.retentionSlider", { coreRetention() }))
     SelfTest.cases.append(("Core.retentionMigration", { coreRetentionMigration() }))
+    SelfTest.cases.append(("Core.singleInstance", { coreSingleInstance() }))
     SelfTest.cases.append(("Core.hotCornerPolicy", { coreHotCornerPolicy() }))
     SelfTest.cases.append(("Core.themeMetrics", { coreThemeMetrics() }))
     SelfTest.cases.append(("Core.contentRules", { coreContentRules() }))
@@ -442,4 +443,11 @@ private func coreRoutes() {
     check(AppMenu.opensFromStatusItem(.rightMouseUp, modifiers: []) && AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: .control)
           && AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: .option), "right, Control- and Option-click open the menu")
     check(!AppMenu.opensFromStatusItem(.leftMouseUp, modifiers: .command), "Command-click doesn't")
+}
+
+private func coreSingleInstance() {
+    check(SingleInstance.other(among: [(10, false)], own: 10) == nil, "alone")
+    check(SingleInstance.other(among: [(10, false), (20, true)], own: 10) == nil, "a copy that already quit doesn't count")
+    check(SingleInstance.other(among: [(20, false), (10, false)], own: 10) == 20, "the other running copy")
+    check(SingleInstance.other(among: [], own: 10) == nil, "not even itself listed yet")
 }

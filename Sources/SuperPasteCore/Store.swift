@@ -76,8 +76,17 @@ public enum StoreError: LocalizedError, Equatable {
     case invalidName
     /// A pinned-only draft (no `copiedAt`) without a pinboard, or an edit that isn't allowed for the item's kind.
     case invalidContent(String)
-    /// The database couldn't be opened or written.
+    /// The database couldn't be opened or written; the message is in plain words (`diskFullMessage` for a full disk).
     case database(String)
+
+    /// The `database` message every layer uses for a full disk, so callers can word their advice accordingly.
+    public static let diskFullMessage = "the disk is full"
+
+    /// Whether the failure is a full disk.
+    public var isDiskFull: Bool {
+        if case .database(let message) = self { return message == Self.diskFullMessage }
+        return false
+    }
 
     public var errorDescription: String? {
         switch self {

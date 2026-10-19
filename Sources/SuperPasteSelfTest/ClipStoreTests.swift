@@ -23,6 +23,12 @@ func registerClipStoreTests() {
         ("ClipStore.syncTies", storeSyncTies),
         ("ClipStore.persistence", storePersistence),
         ("ClipStore.recovery", storeRecovery),
+        ("ClipStore.salvage", storeSalvage),
+        ("ClipStore.unopenableLeftAlone", storeUnopenable),
+        ("ClipStore.diskFull", storeDiskFull),
+        ("ClipStore.blobFolderUnwritable", storeBlobFolderUnwritable),
+        ("ClipStore.flushAndReopen", storeFlushAndReopen),
+        ("ClipStore.newerSchema", storeNewerSchema),
         ("ClipStore.performance", storePerformance),
     ]
     for (name, run) in cases {
@@ -616,6 +622,17 @@ private func bytes(_ count: Int, seed: UInt8) -> Data { Data((0..<count).map { U
     check(ids(reopened, "relaunch") == [id] && reopened.journalHead == 2, "index and journal persist")
 }
 
+@MainActor private func openStore(in folder: URL) -> (Store, StoreRecovery?) {
+    let opened = ClipStoreModule.openStore(database: folder.appendingPathComponent("clips.sqlite"),
+                                           blobs: folder.appendingPathComponent("Blobs", isDirectory: true),
+                                           backup: folder.appendingPathComponent("Backup", isDirectory: true))
+    return (opened.store, opened.recovery)
+}
+
+private func backups(in folder: URL) -> [URL] {
+    (try? FileManager.default.contentsOfDirectory(at: folder.appendingPathComponent("Backup"), includingPropertiesForKeys: nil)) ?? []
+}
+
 @MainActor private func storeRecovery() {
     let folder = SuperPastePaths.base.appendingPathComponent("clipstore-damaged-\(UUID().uuidString)", isDirectory: true)
     let fm = FileManager.default
@@ -623,14 +640,164 @@ private func bytes(_ count: Int, seed: UInt8) -> Data { Data((0..<count).map { U
     let garbage = Data(String(repeating: "this is not a database ", count: 400).utf8)
     try? garbage.write(to: folder.appendingPathComponent("clips.sqlite"))
     try? Data("old".utf8).write(to: folder.appendingPathComponent("Blobs/ab/abc"))
-    let (store, _) = makeStore(in: folder)
+    let (store, recovery) = openStore(in: folder)
     check((try? store.insert(text("fresh start"))) != nil && ids(store, "fresh").count == 1, "a fresh store works")
-    let backups = (try? fm.contentsOfDirectory(at: folder.appendingPathComponent("Backup"), includingPropertiesForKeys: nil)) ?? []
+    let backups = backups(in: folder)
     check(backups.count == 1, "the damaged store moved to one backup folder")
     if let backup = backups.first {
         check((try? Data(contentsOf: backup.appendingPathComponent("clips.sqlite"))) == garbage, "damaged database kept as it was")
         check(fm.fileExists(atPath: backup.appendingPathComponent("Blobs/ab/abc").path), "its blobs moved with it")
+        if case .startedOver(let kept, let items, let boards)? = recovery?.outcome {
+            check(kept.standardizedFileURL.path == backup.standardizedFileURL.path && items == 0 && boards == 0,
+                  "the recovery says what happened")
+        } else { check(false, "the recovery says what happened") }
+        check(recovery?.message.contains(backup.lastPathComponent) == true && recovery?.message.contains("Nothing could be read back") == true,
+              "and where the old file is, in plain words: \(recovery?.message ?? "")")
     }
+}
+
+/// A database with damaged pages in the middle: it is moved aside and most of it comes back into the fresh store,
+/// including the blob files of the items that were salvaged.
+@MainActor private func storeSalvage() {
+    let folder = SuperPastePaths.base.appendingPathComponent("clipstore-salvage-\(UUID().uuidString)", isDirectory: true)
+    let fm = FileManager.default
+    let total = 1_500
+    var pinned: UUID?
+    var big: ClipItem?
+    let filler = String(repeating: "lorem ipsum dolor sit amet ", count: 40)
+    do {
+        let (store, _) = makeStore(in: folder)
+        let board = try! store.createPinboard(name: "Keep", color: .red)
+        _ = try! store.createPinboard(name: "Also", color: .blue)
+        for i in 0..<total { _ = insert(store, text("note \(i) \(filler)")) }
+        pinned = insert(store, text("pinned note", pinboard: board.id)).id
+        let bigEntry = EntryData(reps: [RepData(type: "public.png", data: bytes(200_000, seed: 7))])
+        big = insert(store, ClipDraft(entries: [bigEntry], kind: .image))
+        ClipStoreModule.flush(store)
+    }
+    let database = folder.appendingPathComponent("clips.sqlite")
+    guard var bytes = try? Data(contentsOf: database), bytes.count > 64 * 4096 else {
+        return check(false, "the database has pages to damage")
+    }
+    // Wreck a page in the middle of the file (page 1 is the schema; nothing else is sacred).
+    let page = (bytes.count / 4096) / 2
+    bytes.replaceSubrange((page * 4096)..<((page + 1) * 4096), with: Data(repeating: 0xFF, count: 4096))
+    try! bytes.write(to: database)
+
+    let (store, recovery) = openStore(in: folder)
+    guard case .startedOver(let backup, let items, let boards)? = recovery?.outcome else {
+        return check(false, "damaged pages start a fresh store (got \(String(describing: recovery)))")
+    }
+    check(boards == 2 && store.pinboards.map(\.name) == ["Keep", "Also"], "pinboards salvaged (\(boards))")
+    check(items >= (total + 2) / 2 && items <= total + 2, "most items salvaged: \(items) of \(total + 2)")
+    check(store.count(.empty, in: .history) + store.count(.empty, in: .pinboard(store.pinboards[0].id)) >= items - 1,
+          "salvaged items are listed")
+    let found = store.count(SearchQuery(parsing: "ipsum"), in: .all)
+    check(found >= items - 2, "search still finds them (\(found) of \(items))")
+    if let pinned, let kept = store.item(pinned) { check(kept.pins.count == 1, "the pinned-only item kept its pin") }
+    if let big, let kept = store.item(big.id) {
+        check(store.data(for: kept.payload[0].reps[0].blob)?.count == 200_000, "a salvaged item's blob file came back")
+    }
+    check(fm.fileExists(atPath: backup.appendingPathComponent("clips.sqlite").path), "the damaged file is kept")
+    check(recovery?.message.contains("recovered from it") == true, "the notice counts what came back")
+    check((try? store.insert(text("after recovery"))) != nil, "the fresh store writes")
+}
+
+/// A file that can't be opened for a reason that says nothing about its contents is left exactly as it is.
+@MainActor private func storeUnopenable() {
+    let folder = SuperPastePaths.base.appendingPathComponent("clipstore-locked-\(UUID().uuidString)", isDirectory: true)
+    let fm = FileManager.default
+    let id: UUID
+    do {
+        let (store, _) = makeStore(in: folder)
+        id = insert(store, text("behind a permission wall")).id
+        ClipStoreModule.flush(store)
+    }
+    let database = folder.appendingPathComponent("clips.sqlite")
+    let before = try? Data(contentsOf: database)
+    try! fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: database.path)
+    defer { try? fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: database.path) }
+    let (store, recovery) = openStore(in: folder)
+    guard case .inMemory? = recovery?.outcome else {
+        return check(false, "an unreadable file means memory for this launch (got \(String(describing: recovery)))")
+    }
+    check(backups(in: folder).isEmpty, "nothing was moved aside")
+    check((try? store.insert(text("kept only for this session"))) != nil, "the session keeps working")
+    check(recovery?.message.contains("left exactly as it is") == true, "the notice says the file is untouched")
+    try! fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: database.path)
+    check((try? Data(contentsOf: database)) == before, "the file's bytes are what they were")
+    let (reopened, again) = openStore(in: folder)
+    check(again == nil && reopened.item(id) != nil, "once readable again, everything is there")
+}
+
+/// Writes that fail because the disk (here: the database's page cap) is full leave the store consistent, say so in
+/// plain words, and work again once there is room.
+@MainActor private func storeDiskFull() {
+    let (store, _) = makeStore()
+    let filler = String(repeating: "x", count: 8_000)
+    for i in 0..<5 { _ = insert(store, text("before \(i) \(filler)")) }
+    let before = store.count(.empty, in: .history)
+    ClipStoreModule.limitDatabase(store, toPages: 1)
+    var failure: StoreError?
+    for i in 0..<200 where failure == nil {
+        do { try store.insert(text("overflow \(i) \(filler)")) } catch let error as StoreError { failure = error } catch {}
+    }
+    check(failure?.isDiskFull == true, "a full database fails as 'the disk is full' (\(String(describing: failure)))")
+    let after = store.count(.empty, in: .history)
+    check(ids(store, "overflow").count == after - before, "no half-written item: every listed item is searchable")
+    ClipStoreModule.limitDatabase(store, toPages: nil)
+    check((try? store.insert(text("room again"))) != nil && ids(store, "room").count == 1, "writes resume once there is room")
+    check(try! store.createPinboard(name: "Fits", color: .red).name == "Fits", "and so do pinboards")
+}
+
+/// A blob folder that can't be written (permissions, a read-only volume) fails the whole insert, not half of it.
+@MainActor private func storeBlobFolderUnwritable() {
+    let (store, folder) = makeStore()
+    let blobs = folder.appendingPathComponent("Blobs")
+    let fm = FileManager.default
+    try? fm.createDirectory(at: blobs, withIntermediateDirectories: true)
+    try! fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: blobs.path)
+    defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: blobs.path) }
+    let large = ClipDraft(entries: [EntryData(reps: [RepData(type: "public.png", data: bytes(100_000, seed: 3))])], kind: .image)
+    check(throwsError(StoreError.database("")) { try store.insert(large) } == false, "the failure names its cause")
+    var failed = false
+    do { try store.insert(large) } catch let error as StoreError { if case .database = error { failed = true } } catch {}
+    check(failed && store.count(.empty, in: .history) == 0, "no item row without its bytes")
+    check((try? store.insert(text("small ones still fit"))) != nil, "inline blobs don't need the folder")
+    try! fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: blobs.path)
+    check((try? store.insert(large)) != nil && store.count(.empty, in: .history) == 2, "writes resume once the folder is writable")
+}
+
+/// Quitting folds the write-ahead log into the file; the file alone holds everything.
+@MainActor private func storeFlushAndReopen() {
+    let folder = SuperPastePaths.base.appendingPathComponent("clipstore-flush-\(UUID().uuidString)", isDirectory: true)
+    let id: UUID
+    do {
+        let (store, _) = makeStore(in: folder)
+        id = insert(store, text("flushed on quit")).id
+        ClipStoreModule.flush(store)
+        let wal = folder.appendingPathComponent("clips.sqlite-wal")
+        let size = (try? FileManager.default.attributesOfItem(atPath: wal.path)[.size] as? Int) ?? 0
+        check(size == 0, "the write-ahead log is empty after a flush (\(size) bytes)")
+    }
+    // Only the main file: what a backup tool or an update's swap sees.
+    for suffix in ["-wal", "-shm"] { try? FileManager.default.removeItem(at: folder.appendingPathComponent("clips.sqlite" + suffix)) }
+    let (reopened, recovery) = openStore(in: folder)
+    check(recovery == nil && reopened.item(id)?.text == "flushed on quit", "the main file alone holds the data")
+}
+
+/// A database written by a newer Super Paste opens as it is: nothing is moved, nothing is lost.
+@MainActor private func storeNewerSchema() {
+    let folder = SuperPastePaths.base.appendingPathComponent("clipstore-newer-\(UUID().uuidString)", isDirectory: true)
+    let id: UUID
+    do {
+        let (store, _) = makeStore(in: folder)
+        id = insert(store, text("from the future")).id
+        ClipStoreModule.setSchemaVersion(store, 99)
+    }
+    let (reopened, recovery) = openStore(in: folder)
+    check(recovery == nil && reopened.item(id) != nil && backups(in: folder).isEmpty, "a newer file is used as it is")
+    check((try? reopened.insert(text("still writes"))) != nil, "and still takes writes")
 }
 
 @MainActor private func storePerformance() {

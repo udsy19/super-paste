@@ -87,6 +87,16 @@ final class Database {
         var description: String { "SQLite error \(code): \(message)" }
         /// The file isn't a usable database (garbage, truncated, or damaged pages).
         var isDamage: Bool { [SQLITE_CORRUPT, SQLITE_NOTADB].contains(code & 0xFF) }
+        /// Another connection holds the file; worth trying again shortly.
+        var isBusy: Bool { [SQLITE_BUSY, SQLITE_LOCKED].contains(code & 0xFF) }
+        /// The failure says nothing about the file's contents: locks, permissions, a full or failing disk, memory. A
+        /// file that fails this way is never treated as damaged.
+        var isTransient: Bool {
+            isBusy || [SQLITE_CANTOPEN, SQLITE_FULL, SQLITE_IOERR, SQLITE_PERM, SQLITE_READONLY, SQLITE_NOMEM, SQLITE_AUTH,
+                       SQLITE_PROTOCOL, SQLITE_INTERRUPT].contains(code & 0xFF)
+        }
+        /// The disk (or the database's size cap) is full.
+        var isFull: Bool { code & 0xFF == SQLITE_FULL }
     }
 
     private let handle: OpaquePointer
@@ -118,6 +128,17 @@ final class Database {
     var lastInsertRowID: Int64 { sqlite3_last_insert_rowid(handle) }
     /// Rows changed by the most recent statement.
     var changes: Int { Int(sqlite3_changes(handle)) }
+
+    /// Whether a single row of `table` can be read at all (salvage: a table whose every read fails is skipped).
+    func canRead(_ table: String) -> Bool {
+        (try? first("SELECT 1 FROM \(table) LIMIT 1") { _ in true }) != nil
+    }
+
+    /// Folds the write-ahead log into the main file and truncates it (quit, before an update swaps the app), so the
+    /// database is one file that any copy or backup tool sees whole.
+    func checkpoint() throws {
+        try execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    }
 
     /// Runs one or more statements without parameters (schema, pragmas).
     func execute(_ sql: String) throws {

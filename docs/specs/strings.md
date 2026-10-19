@@ -833,7 +833,7 @@ Tool messages and errors:
 |---|
 | Preview — would delete this item from history and its pinboard, for good. Call again with confirm: true to delete. |
 | Deleted item. |
-| Preview — would delete pinboard "`<name>`" (`<n>` items). Call again with confirm: true to delete. Pinned items stay in clipboard history. |
+| Preview — would delete pinboard "`<name>`" (`<n>` items). Call again with confirm: true to delete. Items that are also in the clipboard history stay there; items that live only in this pinboard are deleted with it. |
 | Deleted pinboard "`<name>`". |
 | Invalid arguments: `<detail>` |
 | No clipboard item found with id `<id>`. Use search to find valid item ids. |

@@ -76,7 +76,9 @@ final class BlobStore {
     }
 
     /// The launch sweep: removes unreferenced blobs saved before `cutoff` (younger ones may be waiting for the item
-    /// that will use them, e.g. a link preview or a sync download) and files with no row at all.
+    /// that will use them, e.g. a link preview or a sync download) and files with no row at all that are older than
+    /// `cutoff` (a file written moments before a crash may still get its row from the write that was rolled back
+    /// and runs again).
     func sweep(savedBefore cutoff: Date) throws {
         let orphans = try db.query("""
             SELECT digest FROM blobs WHERE created_at < ? AND digest NOT IN (
@@ -92,8 +94,10 @@ final class BlobStore {
         let fm = FileManager.default
         guard let shards = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
         for shard in shards {
-            for file in (try? fm.contentsOfDirectory(at: shard, includingPropertiesForKeys: nil)) ?? []
+            for file in (try? fm.contentsOfDirectory(at: shard, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
             where !files.contains(file.lastPathComponent) {
+                let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                if let modified, modified >= cutoff { continue }
                 try? fm.removeItem(at: file)
             }
         }

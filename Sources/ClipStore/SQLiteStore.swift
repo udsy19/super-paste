@@ -35,11 +35,16 @@ final class SQLiteStore: ItemStoring, SyncStoring {
 
     /// Keep History in days (0 = forever), read when pruning and when deciding what sync may bring back.
     let retentionDays: () -> Int
+    /// What opening did when it wasn't the ordinary open (`Schema.open`); nil otherwise.
+    let recovery: StoreRecovery?
 
     init(database: URL, blobs: URL, backup: URL, retentionDays: @escaping () -> Int) {
         self.retentionDays = retentionDays
-        db = Schema.open(database: database, blobs: blobs, backup: backup)
+        (db, recovery) = Schema.open(database: database, blobs: blobs, backup: backup)
         blobStore = BlobStore(db: db, folder: blobs)
+        // After a recovery the blob folder is exactly what salvage put there: nothing to sweep, and no file is
+        // touched on a launch that already had enough go wrong.
+        guard recovery == nil else { return }
         do {
             try db.transaction {
                 try db.run("DELETE FROM apps WHERE NOT EXISTS (SELECT 1 FROM items WHERE app_id = apps.bundle_id)")
@@ -48,6 +53,13 @@ final class SQLiteStore: ItemStoring, SyncStoring {
             }
         } catch {
             Log.store.error("Launch cleanup failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Puts every committed write into the main database file (quit, and before an update replaces the app).
+    func flush() {
+        do { try db.checkpoint() } catch {
+            Log.store.error("Checkpoint failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -329,7 +341,8 @@ final class SQLiteStore: ItemStoring, SyncStoring {
 // MARK: - Shared helpers
 
 extension SQLiteStore {
-    /// Runs a write in one transaction, mapping SQLite failures to `StoreError.database`.
+    /// Runs a write in one transaction, mapping SQLite and file failures to `StoreError.database` with a message in
+    /// plain words (a full disk is named as such, whichever layer noticed it first).
     func writing<T>(_ body: () throws -> T) throws -> T {
         do {
             return try db.transaction(body)
@@ -337,8 +350,20 @@ extension SQLiteStore {
             throw error
         } catch {
             Log.store.error("Write failed: \(String(describing: error), privacy: .public)")
-            throw StoreError.database(String(describing: error))
+            throw StoreError.database(Self.describe(error))
         }
+    }
+
+    /// What went wrong, for the user: "the disk is full", else SQLite's or the file system's own words.
+    static func describe(_ error: Error) -> String {
+        if let failure = error as? Database.Failure {
+            return failure.isFull ? StoreError.diskFullMessage : failure.message
+        }
+        let nsError = error as NSError
+        let full = (nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileWriteOutOfSpaceError)
+            || (nsError.domain == NSPOSIXErrorDomain && nsError.code == Int(ENOSPC))
+            || ((nsError.userInfo[NSUnderlyingErrorKey] as? NSError).map { $0.domain == NSPOSIXErrorDomain && $0.code == Int(ENOSPC) } ?? false)
+        return full ? StoreError.diskFullMessage : error.localizedDescription
     }
 
     /// Runs a read; a failure is logged and gives `fallback`.
@@ -567,7 +592,7 @@ extension SQLiteStore {
 
     // MARK: Item columns
 
-    static let itemColumnNames = """
+    nonisolated static let itemColumnNames = """
         id, created_at, updated_at, copied_at, last_used_at, kind, title, text, text_length, app_id, device_id, byte_size,
         checksum, image_width, image_height, thumbnail, thumbnail_size, file_paths, link_url, link_title, link_icon,
         link_icon_size, link_image, link_image_size, link_fetched_at
