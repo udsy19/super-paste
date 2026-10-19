@@ -155,6 +155,8 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
         root.resizeHandle.onReset = { [weak self] in self?.resize(to: SPMetrics.Strip.defaultHeight, save: true, animated: true) }
         NotificationCenter.default.addObserver(self, selector: #selector(clipScrolled),
                                                name: NSView.boundsDidChangeNotification, object: root.scrollView.contentView)
+        NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
+                                               name: NSApplication.didChangeScreenParametersNotification, object: nil)
         self.panel = panel
         self.root = root
         configureToolbar()
@@ -174,12 +176,30 @@ final class StripController: NSObject, StripPresenting, NSWindowDelegate {
         updateGeometry()
     }
 
+    /// The strip's frame on `screen`: its full width along the bottom edge, at the saved height.
+    static func frame(on screen: NSScreen, height: CGFloat) -> NSRect {
+        NSRect(x: screen.frame.minX, y: screen.frame.minY, width: screen.frame.width, height: height)
+    }
+
+    /// A display was removed, added or resized while the strip shows: it moves to the current main screen rather
+    /// than staying on a screen that is gone, out of reach but still key.
+    @objc private func screensChanged() {
+        guard isVisible, !hiding, let panel, let root else { return }
+        let screen = NSScreen.main ?? NSScreen.active
+        let frame = Self.frame(on: screen, height: panel.frame.height)
+        guard panel.screen == nil || panel.frame != frame else { return }
+        Log.strip.info("Displays changed; moving the strip to the main screen")
+        layoutForFrame(frame)
+        root.setFrameOrigin(.zero)
+        cards?.reloadData()
+    }
+
     private func present() {
         guard let panel, let root else { return }
         hiding = false
         let screen = NSScreen.main ?? NSScreen.active
         let height = SPMetrics.Strip.clampedHeight(CGFloat(Defaults[.stripHeight]))
-        let frame = NSRect(x: screen.frame.minX, y: screen.frame.minY, width: screen.frame.width, height: height)
+        let frame = Self.frame(on: screen, height: height)
         panel.sharingType = Defaults[.isScreenSharingContentVisible] ? .readOnly : .none
         layoutForFrame(frame)
         if needsReload { reload(keepSelection: true) }

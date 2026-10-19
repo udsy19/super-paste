@@ -1,14 +1,23 @@
 import AppKit
 import SuperPasteCore
 
+extension Defaults.Keys {
+    /// Text typed into New Text Item but not yet created: kept across a quit or crash and put back next time.
+    static let stripKitNewTextDraft = Key<String>("stripKit.newTextItemDraft", default: "")
+}
+
 /// "New Text Item" (behaviour.md §4.9, ui-reference §7): a floating panel with a text editor; Create (⌘S) adds the
-/// text to the list the strip shows (History, or the pinboard as a pinned-only item).
+/// text to the list the strip shows (History, or the pinboard as a pinned-only item). What is typed is kept as a
+/// draft until it is created or deliberately discarded, so a quit, a crash or a stray Esc can't lose it.
 @MainActor
-final class NewTextItemController: NSObject, NSWindowDelegate {
+final class NewTextItemController: NSObject, NSWindowDelegate, NSTextViewDelegate {
     weak var strip: StripController?
     private(set) var window: NSPanel?
     private var textView: NSTextView?
     private var scope: ListScope = .history
+
+    /// The text in the window, or the saved draft while it is closed.
+    var text: String { textView?.string ?? Defaults[.stripKitNewTextDraft] }
 
     /// Opens the window (activating Super Paste so it takes typing); `activating: false` only builds it (renders).
     func show(in scope: ListScope, activating: Bool = true) {
@@ -36,10 +45,12 @@ final class NewTextItemController: NSObject, NSWindowDelegate {
         panel.delegate = self
 
         let view = NewTextItemView(style: strip?.style ?? .current)
-        view.onCancel = { [weak self] in self?.close() }
+        view.onCancel = { [weak self] in self?.cancel() }
         view.onCreate = { [weak self] in self?.create() }
         panel.contentView = view
         textView = view.textView
+        view.textView.delegate = self
+        view.textView.string = Defaults[.stripKitNewTextDraft]
         window = panel
         panel.center()
         guard activating else { return }
@@ -58,15 +69,31 @@ final class NewTextItemController: NSObject, NSWindowDelegate {
         }
         do {
             let result = try store.insert(draft)
+            Defaults[.stripKitNewTextDraft] = ""
             close()
             if let strip, strip.isVisible { strip.reveal(result.item, in: scope == .all ? .history : scope) }
         } catch { Alerts.error("Couldn't create the item.", error) }
     }
 
+    /// Cancel and Esc: text that is there is discarded only after asking.
+    private func cancel() {
+        let text = textView?.string ?? ""
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !Alerts.confirm(L10n.discardTextTitle, info: L10n.discardTextText, confirmTitle: L10n.discardEdits,
+                           cancelTitle: L10n.keepEditing, destructive: true) { return }
+        Defaults[.stripKitNewTextDraft] = ""
+        close()
+    }
+
+    /// Closes the window; a draft that is there stays saved for next time.
     func close() {
         window?.close()
         window = nil
         textView = nil
+    }
+
+    func textDidChange(_ notification: Notification) {
+        Defaults[.stripKitNewTextDraft] = textView?.string ?? ""
     }
 
     func windowWillClose(_ notification: Notification) {

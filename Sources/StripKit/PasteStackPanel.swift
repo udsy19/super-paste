@@ -30,6 +30,8 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
     func start() {
         cancellable = Services.pasting?.pasteStackChanges
             .sink { [weak self] state in self?.update(state) }
+        NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
+                                               name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
     func update(_ state: PasteStackState) {
@@ -42,7 +44,20 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
         emptyHint.isHidden = !state.items.isEmpty
         updateDirection()
         resize(panel)
+        if panel.screen == nil { placeOnMainScreen(panel) }
         if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    /// A display went away under the panel (its saved frame may be on a screen that is no longer there).
+    @objc private func screensChanged() {
+        guard let panel, panel.isVisible, panel.screen == nil else { return }
+        placeOnMainScreen(panel)
+    }
+
+    /// The top-right corner of the main screen, clear of the menu bar.
+    private func placeOnMainScreen(_ panel: NSPanel) {
+        let visible = (NSScreen.main ?? NSScreen.active).visibleFrame
+        panel.setFrameOrigin(NSPoint(x: visible.maxX - panel.frame.width - 20, y: visible.maxY - panel.frame.height - 20))
     }
 
     /// Header height: the title 8 from the top, the list 8 below it.
@@ -85,10 +100,7 @@ final class PasteStackPanelController: NSObject, NSTableViewDataSource, NSTableV
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        if !panel.setFrameUsingName(Self.autosaveName) {
-            let visible = (NSScreen.main ?? NSScreen.active).visibleFrame
-            panel.setFrameOrigin(NSPoint(x: visible.maxX - size.width - 20, y: visible.maxY - size.height - 20))
-        }
+        if !panel.setFrameUsingName(Self.autosaveName) { placeOnMainScreen(panel) }
         panel.setFrameAutosaveName(Self.autosaveName)
 
         let background = NSVisualEffectView()

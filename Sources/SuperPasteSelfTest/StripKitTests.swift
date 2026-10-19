@@ -21,6 +21,8 @@ func registerStripKitTests() {
     SelfTest.cases.append(("StripKit.suggestions", { stripSuggestions() }))
     SelfTest.cases.append(("StripKit.hotCorner", { stripHotCorner() }))
     SelfTest.cases.append(("StripKit.controller", { MainActor.assumeIsolated { stripController() } }))
+    SelfTest.cases.append(("StripKit.editorKeepsText", { MainActor.assumeIsolated { stripEditorKeepsText() } }))
+    SelfTest.cases.append(("StripKit.newTextItemDraft", { MainActor.assumeIsolated { stripNewTextItemDraft() } }))
     SelfTest.cases.append(("StripKit.render", { MainActor.assumeIsolated { stripRender() } }))
 }
 
@@ -977,4 +979,84 @@ enum StripSamples {
         _ = try? store.createPinboard(name: "Work", color: .purple)
         _ = try? store.createPinboard(name: "Snippets", color: .green)
     }
+}
+
+/// An open editor never loses its text: closing it by any route but Cancel saves; an item deleted meanwhile (here,
+/// by sync, by an MCP client) is written back as a new item.
+@MainActor private func stripEditorKeepsText() {
+    let saved = Services.store
+    let store = StripFakeStore()
+    Services.store = store
+    defer { Services.store = saved }
+    let host = PreviewController()
+    let item = try! store.insert(ClipDraft.text("first draft")).item
+
+    func editor(_ item: ClipItem) -> (PreviewViewController, TextPreviewBody?) {
+        let controller = PreviewViewController(item: item, style: .classic, editing: true)
+        controller.host = host
+        controller.view.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
+        return (controller, controller.view.subviews.lazy.compactMap { $0 as? TextPreviewBody }.first)
+    }
+
+    // No changes: closing has nothing to save.
+    let (untouched, _) = editor(item)
+    check(!untouched.hasChanges && untouched.commitPendingEdit(), "an untouched editor closes freely")
+
+    // Changes, then the popover or window goes away: saved.
+    let (edited, body) = editor(item)
+    body?.textDidChange(Notification(name: NSText.didChangeNotification))
+    check(edited.hasChanges, "typing marks the editor changed")
+    check(edited.commitPendingEdit() && !edited.hasChanges, "an implicit close saves the edit")
+    check(store.item(item.id)?.text == "first draft", "the content is written (unchanged text here)")
+
+    // The item was deleted while the editor was open: the text becomes a new item instead of vanishing.
+    let (orphan, orphanBody) = editor(item)
+    orphanBody?.textDidChange(Notification(name: NSText.didChangeNotification))
+    try! store.delete([item.id])
+    let before = store.all.count
+    check(orphan.commitPendingEdit(), "saving still succeeds")
+    check(store.all.count == before + 1 && store.all.last?.text == "first draft" && store.all.last?.isInHistory == true,
+          "the text was written as a new history item")
+
+    // Through `save()` the editor closes only once the store took the edit.
+    let survivor = try! store.insert(ClipDraft.text("kept")).item
+    let (saving, savingBody) = editor(survivor)
+    savingBody?.textDidChange(Notification(name: NSText.didChangeNotification))
+    saving.save()
+    check(!saving.hasChanges && store.item(survivor.id) != nil, "save writes and clears the change flag")
+}
+
+/// What is typed into New Text Item survives the window closing (a quit, a crash) and is only cleared by Create or a
+/// deliberate discard.
+@MainActor private func stripNewTextItemDraft() {
+    let saved = Services.store
+    let store = StripFakeStore()
+    Services.store = store
+    defer { Services.store = saved; Defaults.reset(.stripKitNewTextDraft) }
+    Defaults.reset(.stripKitNewTextDraft)
+
+    let creator = NewTextItemController()
+    creator.show(in: .history, activating: false)
+    guard let window = creator.window, let view = window.contentView,
+          let textView = view.subviews.lazy.compactMap({ $0 as? NSScrollView }).first?.documentView as? NSTextView else {
+        return check(false, "the window has its text view")
+    }
+    textView.string = "half a thought"
+    creator.textDidChange(Notification(name: NSText.didChangeNotification))
+    check(Defaults[.stripKitNewTextDraft] == "half a thought", "every keystroke updates the draft")
+    creator.close()
+    check(creator.window == nil && creator.text == "half a thought", "closed without creating: the draft stays")
+
+    let again = NewTextItemController()
+    again.show(in: .history, activating: false)
+    check(again.text == "half a thought", "the next window opens with the draft")
+    again.close()
+
+    // Create clears it.
+    let creating = NewTextItemController()
+    creating.show(in: .history, activating: false)
+    let create = creating.window?.contentView?.subviews.lazy.compactMap { $0 as? ToolbarButton }.last
+    create?.action?(create!)
+    check(store.all.last?.text == "half a thought" && Defaults[.stripKitNewTextDraft] == "" && creating.window == nil,
+          "created: the item exists and the draft is gone")
 }

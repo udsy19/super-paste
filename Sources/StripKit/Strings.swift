@@ -105,6 +105,12 @@ enum L10n {
     static let editItem = "Edit Item"
     static let discardChanges = "Discard changes"
     static let saveChanges = "Save changes"
+    static let discardEditsTitle = "Discard your changes?"
+    static let discardEditsText = "What you typed here hasn't been saved."
+    static let discardEdits = "Discard"
+    static let keepEditing = "Keep Editing"
+    static let savedAsNewItem = "Saved as a new item"
+    static let savedAsNewItemHint = "The item you were editing was deleted meanwhile"
     static let bold = "Bold"
     static let italic = "Italic"
     static let underline = "Underline"
@@ -119,6 +125,8 @@ enum L10n {
     static let newTextItem = "New Text Item"
     static let create = "Create"
     static let createTextItem = "Create text item"
+    static let discardTextTitle = "Discard this text?"
+    static let discardTextText = "It hasn't been added to Super Paste yet."
 
     // Paste Stack (§3.6)
     static let pasteStack = "Paste Stack"

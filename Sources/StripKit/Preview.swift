@@ -76,12 +76,33 @@ final class PreviewController: NSObject, NSPopoverDelegate {
         }
     }
 
-    func saved(_ item: ClipItem, draft: ClipDraft) {
-        guard let strip else {
-            _ = try? Services.store?.replaceContent(of: item.id, with: draft)
-            return
+    /// Saves an edit; false when the store refused it (the editor then stays open with the text). An item that went
+    /// away while it was being edited (deleted here, by sync or by an MCP client) is written as a new item instead,
+    /// so what was typed is never lost.
+    @discardableResult
+    func saved(_ item: ClipItem, draft: ClipDraft) -> Bool {
+        guard let store = Services.store else { return false }
+        guard store.item(item.id) != nil else {
+            var rescue = draft
+            rescue.copiedAt = Date()
+            rescue.pinboardID = item.pinboardIDs.first { id in store.pinboards.contains { $0.id == id } }
+            do {
+                let result = try store.insert(rescue)
+                HUD.show(L10n.savedAsNewItem, symbol: "checkmark", subtitle: L10n.savedAsNewItemHint)
+                if let strip, strip.isVisible { strip.reveal(result.item) }
+                return true
+            } catch {
+                Alerts.error("Couldn't save the item.", error)
+                return false
+            }
         }
-        strip.changeItems([item.id], actionName: L10n.edit) { try $0.replaceContent(of: item.id, with: draft) }
+        guard let strip else {
+            do { try store.replaceContent(of: item.id, with: draft); return true } catch {
+                Alerts.error("Couldn't change the item.", error)
+                return false
+            }
+        }
+        return strip.changeItems([item.id], actionName: L10n.edit) { try $0.replaceContent(of: item.id, with: draft) }
     }
 
     func renamed(_ item: ClipItem, to title: String?) {
@@ -101,6 +122,11 @@ final class PreviewController: NSObject, NSPopoverDelegate {
         window.onClose = { [weak self] in self?.windows[current.item.id] = nil }
         windows[current.item.id] = window
         return window
+    }
+
+    /// The popover went away under an open editor (a click elsewhere, the strip hiding): the edit is saved, not lost.
+    func popoverWillClose(_ notification: Notification) {
+        popoverController?.commitPendingEdit()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -135,7 +161,10 @@ final class ItemPreviewWindow: NSPanel, NSWindowDelegate {
         delegate = self
     }
 
-    func windowWillClose(_ notification: Notification) { onClose?() }
+    func windowWillClose(_ notification: Notification) {
+        previewController?.commitPendingEdit()
+        onClose?()
+    }
 }
 
 // MARK: - Preview content
@@ -146,6 +175,8 @@ final class PreviewViewController: NSViewController, NSTextFieldDelegate {
     let style: SPStyle
     weak var host: PreviewController?
     private(set) var isEditing: Bool
+    /// Whether the editor's content differs from what it opened with.
+    private(set) var hasChanges = false
 
     private let header = FlippedView()
     private let closeButton = NSButton()
@@ -196,7 +227,11 @@ final class PreviewViewController: NSViewController, NSTextFieldDelegate {
         let body = PreviewBody.make(for: item, style: style, editing: isEditing)
         view.addSubview(body, positioned: .below, relativeTo: footer)
         self.body = body
-        body.onChange = { [weak self] in self?.updateFooter() }
+        hasChanges = false
+        body.onChange = { [weak self] in
+            self?.hasChanges = true
+            self?.updateFooter()
+        }
 
         if isEditing {
             titleField.stringValue = Self.editTitle(item)
@@ -281,14 +316,35 @@ final class PreviewViewController: NSViewController, NSTextFieldDelegate {
 
     // MARK: Actions
 
-    @objc private func closeClicked() { host?.closed(self) }
+    /// The close button: an edit in progress is saved, not thrown away.
+    @objc private func closeClicked() {
+        guard commitPendingEdit() else { return }
+        host?.closed(self)
+    }
 
-    private func cancelEditing() { setEditing(false) }
+    /// Cancel and Esc: with unsaved changes the user is asked, so a stray Esc never empties an editor.
+    private func cancelEditing() {
+        if hasChanges, !Alerts.confirm(L10n.discardEditsTitle, info: L10n.discardEditsText, confirmTitle: L10n.discardEdits,
+                                       cancelTitle: L10n.keepEditing, destructive: true) { return }
+        setEditing(false)
+    }
 
+    /// Saves and closes; a save the store refuses leaves the editor open with its text (the alert says why).
     func save() {
         guard isEditing, let draft = body?.draft(for: item) else { setEditing(false); return }
-        host?.saved(item, draft: draft)
+        guard host?.saved(item, draft: draft) ?? false else { return }
+        hasChanges = false
         host?.closed(self)
+    }
+
+    /// Saves an edit that is still open when the editor is about to go away by any route but Cancel. Returns whether
+    /// it is now safe to close.
+    @discardableResult
+    func commitPendingEdit() -> Bool {
+        guard isEditing, hasChanges, let draft = body?.draft(for: item) else { return true }
+        guard host?.saved(item, draft: draft) ?? false else { return false }
+        hasChanges = false
+        return true
     }
 
     private func pinMenu() -> NSMenu? {

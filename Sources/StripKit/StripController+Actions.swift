@@ -224,13 +224,18 @@ extension StripController {
 
     /// Applies a change to items, registering an undo that writes their previous values back (titles, pins,
     /// content; behaviour.md §4.10).
-    func changeItems(_ ids: [UUID], actionName: String, _ change: (ItemStoring) throws -> Void) {
-        guard let store = Services.store else { return }
+    @discardableResult
+    func changeItems(_ ids: [UUID], actionName: String, _ change: (ItemStoring) throws -> Void) -> Bool {
+        guard let store = Services.store else { return false }
         let before = store.items(ids)
         do {
             try change(store)
             registerRestore(before, actionName: actionName)
-        } catch { Alerts.error("Couldn't change the item.", error) }
+            return true
+        } catch {
+            Alerts.error("Couldn't change the item.", error)
+            return false
+        }
     }
 
     private func registerRestore(_ previous: [ClipItem], actionName: String) {
