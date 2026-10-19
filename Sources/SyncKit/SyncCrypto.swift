@@ -19,9 +19,9 @@ public enum SyncError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .missingKey:
-            "This folder is already used by another Mac. Import that Mac's sync key first."
+            "This folder is already used by another Mac. Import that Mac's sync key first (Settings › Sync › Import Key), or choose an empty folder to start over. Your history on this Mac is not affected."
         case .keyMismatch:
-            "This Mac's sync key doesn't match the one the folder was set up with."
+            "This Mac's sync key doesn't match the one the folder was set up with. Import the key from a Mac that syncs through this folder, or choose an empty folder to start over. Your history on this Mac is not affected."
         case .invalidKey:
             "That isn't a Super Paste sync key."
         case .folderUnavailable(let why):

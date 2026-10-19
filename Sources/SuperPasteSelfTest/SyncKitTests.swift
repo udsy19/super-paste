@@ -17,6 +17,7 @@ func registerSyncKitTests() {
     SelfTest.cases.append(("SyncKit.keysAndDisabled", { MainActor.assumeIsolated { syncKeysAndDisabled() } }))
     SelfTest.cases.append(("SyncKit.pruneStaysLocal", { MainActor.assumeIsolated { syncPruneStaysLocal() } }))
     SelfTest.cases.append(("SyncKit.compaction", { MainActor.assumeIsolated { syncCompaction() } }))
+    SelfTest.cases.append(("SyncKit.filesStillArriving", { MainActor.assumeIsolated { syncArrivingFiles() } }))
 }
 
 // MARK: - Helpers shared with MCPKitTests
@@ -731,4 +732,48 @@ private func throwsError(_ expected: SyncError, _ body: () throws -> Void) -> Bo
 
 private extension SyncStatus {
     var isSynced: Bool { if case .synced = self { true } else { false } }
+}
+
+/// A segment or blob file a cloud service has created but not yet filled is "not here yet", never "damaged": nothing
+/// is reported, nothing is skipped, and it is read once it is whole.
+@MainActor
+private func syncArrivingFiles() {
+    let root = scratchFolder("sync-arriving")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let folder = root.appendingPathComponent("Shared", isDirectory: true)
+    let fm = FileManager.default
+    let a = SimulatedMac("A", stateRoot: root)
+    let first = try! a.store.insert(.text("first")).item
+    try? a.sync.enable(folder: folder)
+    a.pass()
+
+    // A's next segment exists but is empty (being uploaded): C reads up to it and waits.
+    let arriving = folder.appendingPathComponent("devices/mac-A/00000002.log")
+    fm.createFile(atPath: arriving.path, contents: Data())
+    let c = SimulatedMac("C", stateRoot: root)
+    try? c.sync.importKey(a.sync.exportKey()!)
+    try? c.sync.enable(folder: folder)
+    c.pass()
+    checkNow(c.store.item(first.id)?.text == "first", "what is whole is read")
+    checkNow(c.sync.status.isSynced, "an empty file isn't an error: \(c.sync.status)")
+    try? fm.removeItem(at: arriving)
+    let second = try! a.store.insert(.text("second")).item
+    a.pass()
+    c.pass()
+    checkNow(c.store.item(second.id)?.text == "second" && c.sync.status.isSynced, "read once it is whole")
+
+    // A blob file that is empty: the record waits for it instead of being refused as forged.
+    let image = Data("a screenshot".utf8)
+    let picture = try! a.store.insert(ClipDraft(entries: [EntryData(reps: [RepData(type: "public.png", data: image)])], kind: .image)).item
+    a.pass()
+    let key = try! SyncKey(text: a.sync.exportKey()!)
+    let name = key.blobName(forDigest: ClipChecksum.hex(of: image))
+    let blob = folder.appendingPathComponent("blobs/\(name.prefix(2))/\(name).blob")
+    let sealedBlob = try! Data(contentsOf: blob)
+    try! Data().write(to: blob)
+    c.pass()
+    checkNow(c.store.item(picture.id) == nil && c.sync.status.isSynced, "the item waits for its bytes, without an error")
+    try! sealedBlob.write(to: blob)
+    c.pass()
+    checkNow(c.store.item(picture.id) != nil && c.store.hasBlob(ClipChecksum.hex(of: image)), "applied once the blob is whole")
 }

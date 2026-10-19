@@ -343,8 +343,8 @@ extension StripController {
         guard let store = Services.store else { return }
         hideSuppression += 1
         defer { hideSuppression -= 1 }
-        guard Alerts.confirm(L10n.eraseHistoryTitle, info: L10n.eraseHistoryText, confirmTitle: L10n.erase,
-                             destructive: true) else { return }
+        let info = Services.sync?.folder != nil ? L10n.eraseHistoryText + " " + L10n.eraseHistorySyncedText : L10n.eraseHistoryText
+        guard Alerts.confirm(L10n.eraseHistoryTitle, info: info, confirmTitle: L10n.erase, destructive: true) else { return }
         panel?.makeKey()
         do { try store.eraseHistory() } catch { Alerts.error("Couldn't erase the history.", error) }
     }

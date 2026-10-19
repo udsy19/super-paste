@@ -96,6 +96,7 @@ enum L10n {
     static let deletePinboardText = "The Pinboard and all its content will be deleted. This action cannot be undone."
     static let eraseHistoryTitle = "Are you sure you want to erase your Clipboard History?"
     static let eraseHistoryText = "Pinned items and Pinboards won't be deleted. This action cannot be undone."
+    static let eraseHistorySyncedText = "The history on the other Macs you sync with is erased too."
 
     // Preview and editors (§4.8)
     static let editText = "Edit Text"

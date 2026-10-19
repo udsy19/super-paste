@@ -72,8 +72,9 @@ struct GeneralPane: View {
     }
 
     private func eraseHistory() {
-        guard Alerts.confirm(Strings.General.eraseTitle, info: Strings.General.eraseText,
-                             confirmTitle: Strings.Action.erase, destructive: true) else { return }
+        let synced = Services.sync?.folder != nil
+        let info = synced ? Strings.General.eraseText + " " + Strings.General.eraseSyncedText : Strings.General.eraseText
+        guard Alerts.confirm(Strings.General.eraseTitle, info: info, confirmTitle: Strings.Action.erase, destructive: true) else { return }
         do { try Services.store?.eraseHistory() } catch { Alerts.error(Strings.General.eraseTitle, error) }
     }
 }

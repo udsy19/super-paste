@@ -115,14 +115,20 @@ actor SyncFolder {
         (1...64).contains(id.count) && id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
     }
 
+    /// Segments by number. A placeholder (iCloud Drive hasn't downloaded the file) and an empty file (a cloud service
+    /// that creates the file before filling it) both count as pending: reading stops there and tries again later,
+    /// rather than reporting a damaged file.
     func listSegments(device: String) -> SegmentListing {
         let dir = devicesDir.appendingPathComponent(device, isDirectory: true)
         var listing = SegmentListing()
-        for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] {
-            var file = name
+        let urls = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        for url in urls {
+            var file = url.lastPathComponent
             var placeholder = false
             if file.hasPrefix("."), file.hasSuffix(".icloud") {
                 file = String(file.dropFirst().dropLast(".icloud".count))
+                placeholder = true
+            } else if ((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 1) == 0 {
                 placeholder = true
             }
             let parts = file.split(separator: ".")
@@ -238,7 +244,8 @@ actor SyncFolder {
             return .missing
         }
         let size = (try? fm.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.intValue ?? 0
-        guard size <= Self.maxBlobBytes, let sealed = try? Data(contentsOf: file) else { return .missing }
+        // An empty file is still being written by whatever syncs the folder: not here yet, rather than damaged.
+        guard size > 0, size <= Self.maxBlobBytes, let sealed = try? Data(contentsOf: file) else { return .missing }
         guard let plain = try? SyncCrypto.open(sealed, key: key, context: "blobs/\(name)"),
               ClipChecksum.hex(of: plain) == digest else { return .corrupt }
         return .data(plain)

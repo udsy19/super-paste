@@ -315,8 +315,17 @@ public final class FolderSync: SyncServicing {
         return caughtUp && state.deferred.isEmpty
     }
 
+    /// Records this far ahead of this Mac's clock come from a Mac whose clock is wrong; last-writer-wins would let
+    /// them beat every later edit made here. They are applied all the same (the store converges either way), but
+    /// the log says what is going on.
+    static let clockSkewTolerance: TimeInterval = 3_600
+
     private func apply(_ records: [SyncRecord], _ io: SyncFolder) async throws {
         var ready: [SyncRecord] = []
+        let horizon = Date().addingTimeInterval(Self.clockSkewTolerance)
+        if let ahead = records.first(where: { $0.updatedAt > horizon }) {
+            Log.sync.warning("A record is dated \(Int(ahead.updatedAt.timeIntervalSinceNow / 60)) minutes in the future; another Mac's clock may be wrong")
+        }
         for record in records {
             let key = record.syncKey
             if try await fetchBlobs(for: record, io) {

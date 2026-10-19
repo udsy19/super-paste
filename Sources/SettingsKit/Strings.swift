@@ -58,6 +58,7 @@ enum Strings {
         static let eraseHistory = "Erase History…"
         static let eraseTitle = "Are you sure you want to erase your Clipboard History?"
         static let eraseText = "Pinned items and Pinboards won't be deleted. This action cannot be undone."
+        static let eraseSyncedText = "The history on the other Macs you sync with is erased too."
         static let reduceTitle = "You have items older than the new history limit. Do you want to delete these older items and apply the new limit?"
         static let stripHeight = "Strip height"
         static let stripHeightInfo = "Taller strips show larger cards."
