@@ -435,9 +435,8 @@ Ideas being considered, in no particular order and not promises. Vote or add you
 ## Credits
 
 Super Paste is an independent project inspired by [Paste](https://pasteapp.io); it is not affiliated with
-or endorsed by Paste or its makers. Apple, macOS and Mac are trademarks of Apple Inc. The website uses
-[Onest](https://github.com/googlefonts/onest) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), both
-under the SIL Open Font License. Everything else is Apple frameworks and the code in this repository.
+or endorsed by Paste or its makers. Apple, macOS and Mac are trademarks of Apple Inc. Everything else is Apple
+frameworks and the code in this repository.
 
 ## License
 
