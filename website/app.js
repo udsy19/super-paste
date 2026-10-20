@@ -1,425 +1,663 @@
-/* Super Paste website. Every demo is drawn from one card component and one small demo history; nothing a visitor
-   types or copies here is stored or sent anywhere. */
+/* Super Paste website. The product pictures are drawn from one card component, one strip and one small demo
+   history; nothing a visitor does here is stored or sent anywhere. Scrolling is left to the browser: nothing here
+   moves the page except anchor links the visitor clicks. */
 (() => {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const root = document.documentElement;
 
-  // ---------- Apps and demo history ----------
+  // ---------- Apps, pinboards and the demo history ----------
   const APPS = {
-    safari: { name: "Safari", hdr: "var(--h-blue)", icon: "ic-safari" },
-    notes: { name: "Notes", hdr: "var(--h-notes)", icon: "ic-notes" },
-    mail: { name: "Mail", hdr: "var(--h-blue)", icon: "ic-mail" },
-    photos: { name: "Photos", hdr: "var(--h-red)", icon: "ic-photos" },
-    finder: { name: "Finder", hdr: "var(--h-blue)", icon: "ic-finder" },
-    terminal: { name: "Terminal", hdr: "var(--h-terminal)", icon: "ic-terminal" },
-    meter: { name: "Digital Color Meter", hdr: "var(--h-blue)", icon: "ic-meter" },
-    pages: { name: "Pages", hdr: "var(--h-orange)", icon: "ic-pages" },
-    xcode: { name: "Xcode", hdr: "var(--h-blue)", icon: "ic-xcode" },
+    safari: { name: "Safari", hdr: "#1A8CFF", icon: "ic-safari" },
+    notes: { name: "Notes", hdr: "#F2B600", icon: "ic-notes" },
+    mail: { name: "Mail", hdr: "#1A7CF2", icon: "ic-mail" },
+    photos: { name: "Photos", hdr: "#FF3B30", icon: "ic-photos" },
+    finder: { name: "Finder", hdr: "#2F86F6", icon: "ic-finder" },
+    terminal: { name: "Terminal", hdr: "#3A3A3C", icon: "ic-terminal" },
+    meter: { name: "Digital Color Meter", hdr: "#2D6CF6", icon: "ic-meter" },
+    pages: { name: "Pages", hdr: "#FA9214", icon: "ic-pages" },
+    xcode: { name: "Xcode", hdr: "#1C7CF4", icon: "ic-xcode" },
+    messages: { name: "Messages", hdr: "#30C552", icon: "ic-messages" },
+    maps: { name: "Maps", hdr: "#34C759", icon: "ic-maps" },
+    passwords: { name: "Passwords", hdr: "#8E8E93", icon: "ic-passwords" },
+    design: { name: "Sketchpad", hdr: "#A55EEA", icon: "ic-design" },
+    editor: { name: "Code", hdr: "#16213A", icon: "ic-editor" },
+    calendar: { name: "Calendar", hdr: "#FF3B30", icon: "ic-calendar" },
+    books: { name: "Books", hdr: "#FF8A0A", icon: "ic-books" },
+    shortcuts: { name: "Shortcuts", hdr: "#5856D6", icon: "ic-shortcuts" },
   };
-  const PIN_COLORS = { red: "var(--h-red)", orange: "var(--h-orange)", yellow: "var(--h-yellow)", green: "var(--h-green)", blue: "var(--h-blue)", purple: "var(--h-purple)", pink: "var(--h-pink)", gray: "var(--h-gray)" };
-  const PINBOARDS = [
-    { id: "travel", name: "Travel", color: "orange" },
-    { id: "work", name: "Work", color: "purple" },
-    { id: "snippets", name: "Snippets", color: "green" },
-  ];
+  const PINS = {
+    travel: { name: "Travel", c: "#FA9214" },
+    work: { name: "Work", c: "#B663E0" },
+    snippets: { name: "Snippets", c: "#34C759" },
+    commands: { name: "Commands", c: "#0A84FF" },
+    colours: { name: "Colours", c: "#FF2D55" },
+    icons: { name: "Icons", c: "#5856D6" },
+    replies: { name: "Replies", c: "#34C759" },
+    quotes: { name: "Quotes", c: "#FF9500" },
+  };
+  const TYPE_TOKENS = { link: { name: "Link", icon: "i-link" } };
 
-  // kind: text | rich | link | image | files | color. date: today | yesterday | week | month | older.
-  const ITEMS = [
-    { id: "addr", kind: "text", app: "notes", when: "2 minutes ago", date: "today", device: "Studio", title: "Hotel address", pins: ["travel"], text: "Rua Garrett 73, 1200-203 Lisboa" },
-    { id: "flight", kind: "text", app: "mail", when: "25 minutes ago", date: "today", device: "Studio", pins: ["travel"], text: "UA 1931 — SFO → EWR\nSeptember 12, 7:05 AM\nConfirmation: K7Q2LM\n\nUnited Airlines" },
-    { id: "cabin", kind: "link", app: "safari", when: "2 hours ago", date: "today", device: "Studio", pins: ["travel"], url: "https://www.airbnb.com/rooms/48213", host: "airbnb.com", ltitle: "Cabin near Muir Woods with a view", pv: "linear-gradient(160deg, #e8c39e 0%, #c98b5a 45%, #6b3f24 100%)" },
-    { id: "photo", kind: "image", app: "photos", when: "4 hours ago", date: "today", device: "Studio", w: 4032, h: 3024, img: "linear-gradient(170deg, #d9b48f 0%, #a88d8a 45%, #4f5566 100%)" },
-    { id: "brand", kind: "color", app: "meter", when: "5 hours ago", date: "today", device: "Studio", pins: ["work"], hex: "#FF6B35", on: "#fff" },
-    { id: "rebase", kind: "text", app: "terminal", when: "Yesterday", date: "yesterday", device: "MacBook", mono: true, pins: ["snippets"], text: "git rebase -i HEAD~3 && git push --force-with-lease origin strip" },
-    { id: "deck", kind: "files", app: "finder", when: "Yesterday", date: "yesterday", device: "Studio", pins: ["work"], name: "Offsite deck v4.key", path: "~/Documents/Offsite/Offsite deck v4.key" },
-    { id: "quote", kind: "rich", app: "pages", when: "3 days ago", date: "week", device: "MacBook", pins: ["work"], html: "<b>Agenda</b><br>1. Lisbon <i>logistics</i><br>2. Q4 roadmap<br>3. <u>Hiring</u> plan", rbg: "#FFFFFF" },
-    { id: "repo", kind: "link", app: "safari", when: "3 days ago", date: "week", device: "MacBook", pins: ["snippets"], url: "https://github.com/udsy19/super-paste", host: "github.com", ltitle: "udsy19/super-paste: A clipboard manager for your Mac", pv: "linear-gradient(160deg, #2b3137 0%, #0d1117 100%)" },
-    { id: "reply", kind: "text", app: "mail", when: "Last week", date: "month", device: "Studio", title: "Invoice reply", pins: ["work", "snippets"], text: "Thanks for the invoice. It's been approved and will be paid on the next run, within 14 days." },
-    { id: "swift", kind: "text", app: "xcode", when: "Last week", date: "month", device: "MacBook", mono: true, pins: ["snippets"], text: "let query = SearchQuery(parsing: \"app:Mail type:link\")\nlet items = store.search(query, in: .all, limit: 20, offset: 0)" },
-    { id: "logo", kind: "image", app: "safari", when: "2 weeks ago", date: "month", device: "Studio", w: 1200, h: 630, img: "linear-gradient(135deg, #0A7AFF 0%, #B663E0 100%)" },
-  ];
-  const byId = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+  const code = (src) => esc(src)
+    .replace(/(&quot;[^&]*?&quot;|'[^']*')/g, '<span class="s">$1</span>')
+    .replace(/\b(let|var|func|SELECT|FROM|WHERE|ORDER BY|LIMIT|DESC|true|false)\b/g, '<span class="k">$1</span>')
+    .replace(/\b(\d+)\b/g, '<span class="n">$1</span>');
 
-  const KIND_LABEL = { text: "Text", rich: "Text", link: "Link", image: "Image", files: "File", color: "Color" };
+  // kind: text | code | rich | link | image | color | files | secret
+  const ITEMS = {
+    addr: { kind: "text", app: "notes", when: "2 minutes ago", text: "Hotel\nRua Garrett 73\n1200-203 Lisboa\nPortugal" },
+    flight: { kind: "text", app: "mail", when: "25 minutes ago", text: "UA 1931 — SFO → EWR\nSeptember 12, 7:05 AM\nConfirmation: K7Q2LM\n\nUnited Airlines" },
+    cabin: { kind: "link", app: "safari", when: "2 hours ago", title: "Cabin near Muir Woods with a view", host: "airbnb.com", art: "dunes", url: "https://www.airbnb.com/rooms/48213" },
+    photo: { kind: "image", app: "photos", when: "4 hours ago", art: "bloom", size: "4032 × 3024" },
+    brand: { kind: "color", app: "meter", when: "5 hours ago", hex: "#FF6B35" },
+    rebase: { kind: "code", app: "terminal", when: "Yesterday", text: "git rebase -i HEAD~3 && git push --force-with-lease origin strip" },
+    deck: { kind: "files", app: "finder", when: "Yesterday", icon: "ic-keynote", path: "~/Documents/Offsite/Offsite deck v4.key" },
+    repo: { kind: "link", app: "safari", when: "3 days ago", title: "udsy19/super-paste: a clipboard manager for Mac", host: "github.com", art: "repo" },
+    quote: { kind: "rich", app: "pages", when: "3 days ago", html: "<b>Offsite agenda</b><br>1. Lisbon <i>logistics</i><br>2. Q4 roadmap<br>3. Hiring plan", chars: 52 },
+    reply: { kind: "text", app: "mail", when: "Last week", title: "Invoice reply", text: "Thanks for the invoice. It's been approved and will be paid on the next run, within 14 days." },
+    swift: { kind: "code", app: "xcode", when: "Last week", text: "let query = SearchQuery(\n  parsing: \"app:Mail type:link\")\nlet items = store.search(\n  query, limit: 20)" },
+    note: { kind: "text", app: "notes", when: "just now", text: "Pick up the film from the lab before 6. Ask about the 120 rolls." },
+    maps: { kind: "link", app: "maps", when: "35 minutes ago", title: "Harbour Street Bakery", host: "maps.apple.com", art: "map" },
+    launch: { kind: "text", app: "messages", when: "1 hour ago", text: "Launch list:\n• Release notes\n• DMG and its SHA-256\n• Post the changelog" },
+    lake: { kind: "link", app: "safari", when: "just now", title: "Emerald Bay loop trail", host: "trailnotes.org", art: "lake" },
+    lisbon: { kind: "link", app: "safari", when: "Yesterday", title: "Lisbon rooftops worth the climb", host: "atlas-travel.co", art: "night" },
+    tram: { kind: "image", app: "photos", when: "Yesterday", art: "bridge", size: "4032 × 3024" },
+    list: { kind: "text", app: "notes", when: "1 hour ago", text: "Packing list:\n• Rain jacket\n• Hiking boots\n• Camera\n• Charger" },
+    sign: { kind: "text", app: "mail", when: "2 weeks ago", title: "Signature", text: "Kind regards,\nInes Moreau\nEditor, Field Notes" },
+    thanks: { kind: "text", app: "mail", when: "3 weeks ago", title: "Thanks", text: "Thanks for sending this over. I'll read it properly tonight and come back to you tomorrow." },
+    follow: { kind: "text", app: "mail", when: "Last month", title: "Follow-up", text: "Just following up on my note from last week. Is the 24th still good for you?" },
+    decline: { kind: "text", app: "mail", when: "Last month", title: "Not now", text: "Thank you for thinking of us. We can't take this on right now, but please keep us in mind." },
+    meet: { kind: "text", app: "calendar", when: "Last month", title: "Availability", text: "Free Tuesday 10–12 or Thursday after 3. Pick whatever suits you." },
+    intro: { kind: "text", app: "mail", when: "2 months ago", title: "Introduction", text: "Hi both, introducing you as promised. Daniel writes about coastlines; Maya draws the maps." },
+    sql: { kind: "code", app: "editor", when: "2 days ago", text: "SELECT id, title\nFROM items\nWHERE kind = 'link'\nORDER BY created DESC\nLIMIT 20;" },
+    json: { kind: "code", app: "editor", when: "3 days ago", text: "{\n  \"mcpServers\": {\n    \"super-paste\": {\n      \"url\": \"http://127.0.0.1:39725/mcp\"\n    }\n  }\n}" },
+    regex: { kind: "code", app: "editor", when: "Last week", text: "^(?<user>[\\w.+-]+)@(?<host>[\\w-]+\\.[\\w.]+)$" },
+    curl: { kind: "code", app: "terminal", when: "Last week", text: "curl -fsSL https://udsy19.github.io/super-paste/install.sh | bash" },
+    "cmd-build": { kind: "text", app: "terminal", when: "now", text: "swift build -c release" },
+    "cmd-test": { kind: "text", app: "terminal", when: "now", text: "swift run SuperPasteSelfTest" },
+    "cmd-run": { kind: "text", app: "terminal", when: "now", text: "open \"build/Super Paste.app\"" },
+    "cmd-add": { kind: "text", app: "terminal", when: "now", text: "git add -p Sources/StripKit" },
+    "cmd-commit": { kind: "text", app: "terminal", when: "now", text: "git commit -m \"Strip: slide up from the screen with the pointer\"" },
+    "cmd-push": { kind: "text", app: "terminal", when: "now", text: "git push origin main" },
+    "c-orange": { kind: "color", app: "meter", when: "2 days ago", title: "Red Orange", hex: "#FF6B35" },
+    "c-butter": { kind: "color", app: "meter", when: "2 days ago", title: "Butter", hex: "#FFD27A", on: "#5A4100" },
+    "c-sky": { kind: "color", app: "meter", when: "3 days ago", title: "Sky", hex: "#8EC5FF", on: "#0B3B73" },
+    "c-mint": { kind: "color", app: "meter", when: "3 days ago", title: "Mint", hex: "#A8E6CF", on: "#14503A" },
+    "c-navy": { kind: "color", app: "meter", when: "Last week", title: "Navy", hex: "#1F3A93" },
+    "c-rose": { kind: "color", app: "meter", when: "Last week", title: "Rose", hex: "#F7A1C4", on: "#6B1238" },
+    "chart-link": { kind: "link", app: "safari", when: "now", title: "Shipping emissions, 2020–2025", host: "ourdata.studio", art: "chart" },
+    "poster-link": { kind: "link", app: "safari", when: "3 minutes ago", title: "Grotesk Display, a type specimen", host: "letterworks.studio", art: "poster" },
+    "forest-link": { kind: "link", app: "messages", when: "3 hours ago", title: "Ten quiet walks near the city", host: "outdoors.guide", art: "forest" },
+    "ceramic-link": { kind: "link", app: "safari", when: "10 minutes ago", title: "Ceramics for small kitchens", host: "makersmarket.shop", art: "ceramic" },
+    "bridge-link": { kind: "link", app: "safari", when: "2 hours ago", title: "Golden hour from the south pier", host: "photoroll.blog", art: "bridge" },
+    "dunes-img": { kind: "image", app: "photos", when: "2 weeks ago", art: "dunes", size: "1890 × 1890" },
+    "bloom-img": { kind: "image", app: "design", when: "2 weeks ago", art: "bloom", size: "2400 × 2400" },
+    "night-img": { kind: "image", app: "photos", when: "3 minutes ago", art: "night", size: "3024 × 4032" },
+    define: { kind: "rich", app: "books", when: "6 days ago", html: "<b>serendipity</b> <i>noun</i><br><br>finding something good without looking for it, like the link you copied last spring.", chars: 98 },
+    essay: { kind: "text", app: "pages", when: "now", title: "Draft", text: "Why local-first matters\n\nThe best clipboard is the one you never think about. It keeps what you copy on the machine you copied it on, and gets out of the way." },
+    "rich-pitch": { kind: "rich", app: "pages", when: "2 hours ago", rbg: "#FFF6D6", html: "<b>Q4 plan</b><br><br>Ship folder sync to everyone, then polish search: filters as tokens, faster results, fewer clicks.", chars: 104 },
+    "secret-wifi": { kind: "secret", app: "passwords", label: "Wi-Fi password", text: "•••• •••• ••••" },
+    "secret-bank": { kind: "secret", app: "passwords", label: "Bank login", text: "8Fj6Ku1fR3402x~f9=\"23(b7:8`2&A2rY" },
+    "secret-zip": { kind: "secret", app: "passwords", label: "API token", text: "sk_live_51H8xK2eZvKYlo2C9QW" },
+    "secret-keys": { kind: "secret", app: "passwords", label: "Recovery codes", text: "k7#Pq9!vR2zT&bL4\nG#4t9Vm^s1yT6!rL\nZp8$kQ3&fV0m4^Wx" },
+  };
 
-  function card(item, o = {}) {
-    const app = APPS[item.app];
-    const pin = o.pinboard ? PINBOARDS.concat(o.extraPinboards || []).find((p) => p.id === o.pinboard) : null;
-    const hdr = pin ? PIN_COLORS[pin.color] : app.hdr;
-    const title = item.title && (pin || o.titles) ? item.title : KIND_LABEL[item.kind];
-    const head = `<div class="card-hd" style="--hdr:${hdr}"><div class="lab"><b>${esc(title)}</b><span>${esc(item.when)}</span></div>${pin ? '<i class="pin"></i>' : `<svg class="app app-ic" viewBox="0 0 64 64" aria-hidden="true"><use href="#${app.icon}"/></svg>`}</div>`;
-    let body = "", foot = "";
-    switch (item.kind) {
+  const KIND = { text: "Text", code: "Text", rich: "Text", link: "Link", image: "Image", color: "Color", files: "File", secret: "Password" };
+
+  function card(id, o = {}) {
+    const it = ITEMS[id];
+    if (!it) return "";
+    const app = APPS[it.app];
+    const pin = o.pin && PINS[o.pin];
+    const hdr = pin ? pin.c : app.hdr;
+    const title = (pin || o.titles) && it.title ? it.title : KIND[it.kind];
+    if (it.kind === "secret") {
+      return `<div class="card secret-card"><div class="card-in"><div class="card-hd" style="--hdr:${app.hdr}"><div class="lab"><b>${esc(it.label)}</b><span>Not saved</span></div><svg class="app"><use href="#${app.icon}"/></svg></div>` +
+        `<div class="card-bd secret"><b>${esc(app.name)}</b><em>${esc(it.text)}</em></div><div class="card-ft">Never saved</div><span class="lock"><svg><use href="#i-lock"/></svg></span></div></div>`;
+    }
+    const head = `<div class="card-hd" style="--hdr:${hdr}"><div class="lab"><b>${esc(title)}</b><span>${esc(it.when)}</span></div>${pin ? '<i class="pin"></i>' : `<svg class="app"><use href="#${app.icon}"/></svg>`}</div>`;
+    let body = "";
+    let foot = "";
+    switch (it.kind) {
       case "text":
-        body = `<div class="card-bd text${item.mono ? " mono" : ""}">${esc(item.text)}</div>`;
-        foot = `<div class="card-ft">${item.text.length} characters</div>`;
+        body = `<div class="card-bd text">${esc(it.text)}</div>`;
+        foot = `<div class="card-ft">${it.text.length} characters</div>`;
+        break;
+      case "code":
+        body = `<div class="card-bd text mono">${code(it.text)}</div>`;
+        foot = `<div class="card-ft">${it.text.length} characters</div>`;
         break;
       case "rich":
-        body = `<div class="card-bd text rich" style="--rbg:${item.rbg}">${item.html}</div>`;
-        foot = `<div class="card-ft">${item.html.replace(/<[^>]+>/g, "").length} characters</div>`;
+        body = `<div class="card-bd text rich" style="--rbg:${it.rbg || "#fff"}">${it.html}</div>`;
+        foot = `<div class="card-ft" style="--ftbg:${it.rbg || "#fff"}">${it.chars} characters</div>`;
         break;
       case "link":
-        body = `<div class="card-bd link"><div class="pv" style="--pv:${item.pv}"><div class="fav"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#${app.icon}"/></svg></div></div><div class="meta"><b>${esc(item.ltitle)}</b><span>${esc(item.host)}</span></div></div>`;
+        body = `<div class="card-bd link"><div class="pv"><svg class="art"><use href="#art-${it.art}"/></svg></div><div class="meta"><b>${esc(it.title)}</b><span>${esc(it.host)}</span></div></div>`;
         break;
       case "image":
-        body = `<div class="card-bd image" style="--img:${item.img}"><span class="pill">${item.w} × ${item.h}</span></div>`;
+        body = `<div class="card-bd image"><svg class="art"><use href="#art-${it.art}"/></svg><span class="pill">${it.size}</span></div>`;
         break;
       case "color":
-        body = `<div class="card-bd color" style="--c:${item.hex};--on:${item.on}">${item.hex}</div>`;
+        body = `<div class="card-bd color" style="--c:${it.hex};--on:${it.on || "#fff"}">${it.hex}</div>`;
         break;
       case "files":
-        body = `<div class="card-bd files"><svg class="ficon" viewBox="0 0 64 80" aria-hidden="true"><use href="#ic-file"/></svg><b>${esc(item.name)}</b><span>${esc(item.path)}</span></div>`;
+        body = `<div class="card-bd files"><svg><use href="#${it.icon}"/></svg><span>${esc(it.path)}</span></div>`;
         break;
     }
-    const badge = o.number ? `<span class="badge">${o.number}</span>` : "";
-    const plain = o.plain ? `<span class="plain-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg></span>` : "";
-    const label = `${title} from ${app.name}, ${item.when}`;
-    return `<article class="card${o.selected ? " sel" : ""}" data-id="${item.id}" role="listitem" aria-label="${esc(label)}">${head}${body}${foot}${badge}${plain}</article>`;
+    return `<div class="card${o.sel ? " sel" : ""}" data-id="${id}"><div class="card-in">${head}${body}${foot}</div></div>`;
   }
 
-  // ---------- Theme ----------
-  const themeBtn = $("[data-theme-toggle]");
-  if (themeBtn) {
-    themeBtn.addEventListener("click", () => {
-      const root = document.documentElement;
-      const dark = root.getAttribute("data-theme") === "dark" || (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
-      const next = dark ? "light" : "dark";
-      root.setAttribute("data-theme", next);
-      try { localStorage.setItem("sp-theme", next); } catch (e) {}
-    });
+  // ---------- Strip: toolbar and cards ----------
+  // One toolbar for both modes: the magnifier grows into the search field and the tabs fold into dots.
+  const TOKEN = (t) => {
+    if (PINS[t]) return `<span class="tok"><i style="--c:${PINS[t].c}"></i>${PINS[t].name}</span>`;
+    if (TYPE_TOKENS[t]) return `<span class="tok"><svg><use href="#${TYPE_TOKENS[t].icon}"/></svg>${TYPE_TOKENS[t].name}</span>`;
+    if (APPS[t]) return `<span class="tok"><svg><use href="#${APPS[t].icon}"/></svg>${APPS[t].name}</span>`;
+    return "";
+  };
+  function tabsHTML(list) {
+    const tabs = list.split(",");
+    const anyOn = tabs.some((t) => t.endsWith("*"));
+    return tabs.map((t) => {
+      const on = t.endsWith("*");
+      const key = t.replace("*", "");
+      if (key === "clip") return `<span class="tab${on || !anyOn ? " on" : ""}" data-tab="clip"><svg><use href="#i-history"/></svg>Clipboard</span>`;
+      if (key === "plus") return `<span class="tb-i"><svg><use href="#i-plus"/></svg></span>`;
+      return `<span class="tab${on ? " on" : ""}" data-tab="${key}"><i style="--c:${PINS[key].c}"></i>${PINS[key].name}</span>`;
+    }).join("");
+  }
+  function toolbar(el) {
+    const search = el.dataset.search !== undefined;
+    const [tokens, query] = search ? el.dataset.search.split("|") : ["", ""];
+    const toks = tokens.split(",").filter(Boolean).map(TOKEN).join("");
+    const dots = ["travel", "work", "snippets", "commands"].map((p) => `<i class="tb-dot" style="--c:${PINS[p].c}"></i>`).join("");
+    return `<div class="tb${search ? " is-search" : ""}"><span class="sfield${search ? " focus" : ""}"><svg><use href="#i-search"/></svg><span class="sf-in">${toks}<span class="q">${esc(query || "")}</span></span><span class="tail"><svg><use href="#i-clear"/></svg><svg><use href="#i-filter"/></svg></span></span>` +
+      `<span class="tb-tabs">${tabsHTML(el.dataset.tabs || "clip,travel,work,snippets,plus")}</span><span class="tb-dots"><span class="tb-i on"><svg><use href="#i-history"/></svg></span>${dots}</span><svg class="tb-more"><use href="#i-more"/></svg><div class="sugg"></div></div>`;
+  }
+  const cardsHTML = (ids, o = {}) => ids.split(",").filter(Boolean).map((id) => (id === "_" ? '<span class="slot"></span>' : card(id, { sel: id === o.sel, pin: o.pin }))).join("");
+  function renderStrip(el) {
+    el.innerHTML = `${toolbar(el)}<div class="cards">${cardsHTML(el.dataset.cards || "", { sel: el.dataset.sel, pin: el.dataset.pin })}</div>`;
   }
 
-  // ---------- Copy buttons ----------
-  const toast = $("[data-toast]");
-  let toastTimer;
-  function say(msg) {
-    if (!toast) return;
-    toast.textContent = msg; toast.classList.add("on");
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("on"), 1600);
+  function renderStack(el) {
+    const rows = el.dataset.stack.split(",").map((id, i) => {
+      const it = ITEMS[id];
+      let icon = "i-lines";
+      let text = it.text || "";
+      if (it.kind === "link") { icon = "i-link"; text = it.url || `https://${it.host}`; }
+      if (it.kind === "image") { icon = "i-doc"; text = `Image ${it.size}`; }
+      if (it.kind === "color") { text = it.hex; }
+      const glyph = it.kind === "color" ? `<svg style="color:${it.hex}"><use href="#i-swatch"/></svg>` : `<svg><use href="#${icon}"/></svg>`;
+      return `<div class="sp-row${i === 0 ? " next" : ""}">${glyph}<span>${esc(text.replace(/\n+/g, " "))}</span></div>`;
+    }).join("");
+    el.innerHTML = `<div class="sp-in"><div class="sp-hd"><svg class="x"><use href="#i-close"/></svg>Paste Stack<svg class="so"><use href="#i-sort"/></svg></div>${rows}</div>`;
   }
-  $$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(b.getAttribute("data-copy")); say("Copied"); }
-    catch (e) { say("Select and copy it by hand"); }
+
+  $$("[data-strip]").forEach(renderStrip);
+  $$("[data-stack]").forEach(renderStack);
+  $$("[data-card]").forEach((el) => { el.insertAdjacentHTML("afterbegin", card(el.dataset.card, { sel: el.dataset.sel === "1" })); });
+  $$("[data-row]").forEach((el) => { el.innerHTML = el.dataset.row.split(",").map((id) => card(id)).join(""); });
+
+  // ---------- Header: frost on scroll, inverted over dark sections, drop-down, menu ----------
+  const frost = $(".frost");
+  if (frost && !(window.CSS && CSS.supports("animation-timeline: scroll()"))) {
+    let ticking = false;
+    const paint = () => { ticking = false; frost.style.opacity = String(Math.min(1, window.scrollY / 69)); };
+    addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(paint); } }, { passive: true });
+    paint();
+  }
+
+  const darkSections = $$("[data-invert-header]");
+  let invertIO = null;
+  const watchInvert = () => {
+    if (invertIO) invertIO.disconnect();
+    const under = new Set();
+    invertIO = new IntersectionObserver((entries) => {
+      entries.forEach((e) => (e.isIntersecting ? under.add(e.target) : under.delete(e.target)));
+      root.toggleAttribute("data-header-invert", under.size > 0);
+    }, { rootMargin: `0px 0px ${-(innerHeight - 72)}px 0px` });
+    darkSections.forEach((s) => invertIO.observe(s));
+  };
+  if (darkSections.length) { watchInvert(); addEventListener("resize", watchInvert); }
+
+  // A click on a drop-down link closes the panel until the pointer leaves.
+  $$(".dd-panel a").forEach((a) => a.addEventListener("click", () => {
+    const dd = a.closest(".dd");
+    dd.classList.add("collapsed");
+    a.blur();
+    dd.addEventListener("mouseleave", () => dd.classList.remove("collapsed"), { once: true });
   }));
 
-  // ---------- Reveal + nav highlight ----------
-  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -8% 0px" });
-  $$(".reveal").forEach((el) => io.observe(el));
-
-  const navLinks = $$("[data-nav] a");
-  const sections = navLinks.map((a) => $(a.getAttribute("href"))).filter(Boolean);
-  const navIO = new IntersectionObserver((es) => {
-    es.forEach((e) => { if (e.isIntersecting) {
-      navLinks.forEach((a) => a.removeAttribute("aria-current"));
-      const a = navLinks.find((l) => l.getAttribute("href") === "#" + e.target.id);
-      if (a) a.setAttribute("aria-current", "true");
-    } });
-  }, { rootMargin: "-40% 0px -55% 0px" });
-  sections.forEach((s) => navIO.observe(s));
-
-  // A demo runs only while on screen.
-  function whenVisible(el, start, stop) {
-    if (!el) return;
-    const o = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? start() : stop && stop())), { threshold: 0.25 });
-    o.observe(el);
+  const burger = $("[data-burger]");
+  const menu = $("[data-menu]");
+  const outside = [$("main"), $("footer")];
+  function setMenu(open) {
+    root.classList.toggle("menu-open", open);
+    burger.setAttribute("aria-expanded", String(open));
+    burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    outside.forEach((el) => el && (el.inert = open));
+  }
+  if (burger && menu) {
+    burger.addEventListener("click", () => setMenu(!root.classList.contains("menu-open")));
+    $$("a", menu).forEach((a) => a.addEventListener("click", () => setMenu(false)));
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && root.classList.contains("menu-open")) { setMenu(false); burger.focus({ preventScroll: true }); } });
+    matchMedia("(min-width: 62.5rem)").addEventListener("change", (m) => { if (m.matches) setMenu(false); });
   }
 
-  // ---------- Hero scene ----------
-  (function scene() {
-    const root = $("[data-scene]");
-    if (!root) return;
-    const strip = $("[data-strip]", root), cardsEl = $("[data-scene-cards]", root), pointer = $("[data-pointer]", root);
-    const notes = $('[data-win="notes"]', root), mail = $('[data-win="mail"]', root), sel = $("[data-sel]", root);
-    const ins1 = $("[data-ins-1]", root), ins2 = $("[data-ins-2]", root), hud = $("[data-hud]", root), mbApp = $("[data-mb-app]", root), mbSp = $("[data-mb-sp]", root);
-    const keys = Object.fromEntries($$("[data-key]", root).map((k) => [k.dataset.key, k]));
-    const stepBtns = $$("[data-step]");
-    const base = ["flight", "cabin", "photo", "brand", "rebase", "deck"];
-    let timers = [], running = false, stepIndex = 0;
+  // ---------- Reveal on scroll ----------
+  const rise = $$(".rise-in");
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+      if (e.isIntersecting) { e.target.dataset.revealed = ""; io.unobserve(e.target); }
+    }), { rootMargin: "0px 0px -15% 0px" });
+    rise.forEach((el) => io.observe(el));
+  } else {
+    rise.forEach((el) => { el.dataset.revealed = ""; });
+  }
 
-    function render(ids, selected) {
-      cardsEl.innerHTML = ids.map((id) => card(byId[id], { selected: id === selected })).join("");
-    }
-    function front(which) {
-      notes.classList.toggle("front", which === "notes"); notes.classList.toggle("back", which !== "notes");
-      mail.classList.toggle("front", which === "mail"); mail.classList.toggle("back", which !== "mail");
-      mbApp.textContent = which === "notes" ? "Notes" : "Mail";
-      if (which === "notes") notes.style.zIndex = 3, mail.style.zIndex = 2; else notes.style.zIndex = 2, mail.style.zIndex = 3;
-    }
-    function key(name, on) { Object.values(keys).forEach((k) => k.classList.remove("on")); if (name && on !== false) keys[name].classList.add("on"); }
-    function move(x, y) { pointer.style.left = `calc(${x} * var(--k))`; pointer.style.top = `calc(${y} * var(--k))`; }
-    function click() { pointer.classList.remove("click"); void pointer.offsetWidth; pointer.classList.add("click"); }
-    function at(ms, fn) { timers.push(setTimeout(fn, reduced ? 0 : ms)); }
-    function clear() { timers.forEach(clearTimeout); timers = []; }
-    function mark(i) { stepIndex = i; stepBtns.forEach((b) => b.toggleAttribute("aria-current", false)); if (stepBtns[i]) stepBtns[i].setAttribute("aria-current", "step"); }
+  // ---------- Carousel: moves its own track sideways, never the page ----------
+  (function carousel() {
+    const box = $("[data-carousel]");
+    if (!box) return;
+    const track = $("[data-track]", box);
+    const items = Array.from(track.children);
+    const dots = $$("[data-dots] button", box);
+    const prev = $("[data-prev]", box);
+    const next = $("[data-next]", box);
+    let current = 0;
+    let frame = null;
 
-    // Initial state.
-    function reset() {
-      clear(); strip.classList.remove("open", "closing"); sel.classList.remove("on"); hud.classList.remove("on"); key(null);
-      ins1.textContent = ""; ins2.textContent = ""; front("mail"); move(52, 32); render(base, null);
+    const ease = (t) => {
+      // cubic-bezier(.4, 0, .2, 1) solved for x by bisection.
+      const b = (u, p1, p2) => 3 * (1 - u) ** 2 * u * p1 + 3 * (1 - u) * u ** 2 * p2 + u ** 3;
+      let lo = 0, hi = 1, u = .5;
+      for (let i = 0; i < 20; i++) { u = (lo + hi) / 2; if (b(u, .4, .2) < t) lo = u; else hi = u; }
+      return b(u, 0, 1);
+    };
+    function glide(i) {
+      const target = items[i];
+      if (!target) return;
+      const pad = parseFloat(getComputedStyle(track).paddingLeft) || 0;
+      const to = target.offsetLeft - pad;
+      const from = track.scrollLeft;
+      if (frame) cancelAnimationFrame(frame);
+      if (from === to || reduced) { delete track.dataset.gliding; track.scrollLeft = to; return; }
+      const start = performance.now();
+      track.dataset.gliding = "";
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / 700);
+        track.scrollLeft = from + (to - from) * ease(t);
+        if (t < 1) { frame = requestAnimationFrame(step); return; }
+        frame = null;
+        delete track.dataset.gliding;
+      };
+      frame = requestAnimationFrame(step);
     }
-
-    // Steps are absolute times in one loop. Each step can also be started on its own.
-    const STEPS = [
-      function copy() { // 0: copy in Notes
-        mark(0); front("notes"); move(20, 23);
-        at(600, () => { sel.classList.add("on"); });
-        at(1200, () => { key("copy"); hud.classList.add("on"); mbSp.classList.add("pulse"); });
-        at(1900, () => { hud.classList.remove("on"); mbSp.classList.remove("pulse"); });
-        at(2400, () => { key(null); next(); });
-      },
-      function open() { // 1: ⇧⌘V, strip rises with the new card at the front
-        mark(1); front("mail"); move(60, 36);
-        at(500, () => key("open"));
-        at(1000, () => { strip.classList.add("open"); render(["addr"].concat(base), "addr"); });
-        at(2300, () => { key(null); next(); });
-      },
-      function ret() { // 2: Return pastes the address into Mail
-        mark(2);
-        at(300, () => key("return"));
-        at(900, () => { strip.classList.add("closing"); strip.classList.remove("open"); });
-        at(1200, () => { ins1.textContent = "Rua Garrett 73, 1200-203 Lisboa\n"; });
-        at(2200, () => { key(null); strip.classList.remove("closing"); next(); });
-      },
-      function pick() { // 3: open again, move the selection to an older card
-        mark(3); move(60, 36);
-        at(300, () => key("open"));
-        at(800, () => { strip.classList.add("open"); render(["addr"].concat(base), "addr"); });
-        at(1500, () => key("arrows"));
-        at(1700, () => render(["addr"].concat(base), "flight"));
-        at(2200, () => render(["addr"].concat(base), "cabin"));
-        at(2800, () => { key(null); next(); });
-      },
-      function dbl() { // 4: double-click the link card; it lands in Mail
-        mark(4);
-        at(200, () => { move(56, 62); });
-        at(900, () => { key("dbl"); click(); });
-        at(1400, () => { strip.classList.add("closing"); strip.classList.remove("open"); });
-        at(1700, () => { ins2.textContent = "Booking: airbnb.com/rooms/48213"; });
-        at(3400, () => { key(null); strip.classList.remove("closing"); render(base, null); next(); });
-      },
-    ];
-    function next() { if (!running) return; const i = (stepIndex + 1) % STEPS.length; if (i === 0) { reset(); at(600, () => STEPS[0]()); } else STEPS[i](); }
-    function go(i) { clear(); running = true; // rebuild the state the step expects
-      strip.classList.remove("open", "closing"); sel.classList.remove("on"); hud.classList.remove("on"); key(null); front("mail");
-      ins1.textContent = i >= 3 ? "Rua Garrett 73, 1200-203 Lisboa\n" : ""; ins2.textContent = "";
-      render(i >= 1 ? ["addr"].concat(base) : base, null);
-      STEPS[i]();
+    function show(i) {
+      current = i;
+      dots.forEach((d, k) => (k === i ? d.setAttribute("aria-current", "true") : d.removeAttribute("aria-current")));
+      prev.disabled = i === 0;
+      next.disabled = i === items.length - 1;
+      items.forEach((li, k) => {
+        let jump = $(".car-jump", li);
+        if (k === i) { if (jump) jump.remove(); return; }
+        if (!jump) {
+          jump = document.createElement("button");
+          jump.type = "button";
+          jump.className = "car-jump";
+          jump.tabIndex = -1;
+          jump.setAttribute("aria-hidden", "true");
+          jump.addEventListener("click", () => glide(k));
+          li.appendChild(jump);
+        }
+      });
     }
-    function start() { if (running) return; running = true; reset(); at(400, () => STEPS[0]()); }
-    function stop() { running = false; clear(); }
-
-    stepBtns.forEach((b) => b.addEventListener("click", () => go(+b.dataset.step)));
-    $("[data-replay]")?.addEventListener("click", () => go(0));
-    reset();
-    if (reduced) { // a still: strip open, a card selected, both pastes done
-      strip.classList.add("open"); render(["addr"].concat(base), "cabin"); ins1.textContent = "Rua Garrett 73, 1200-203 Lisboa\n"; ins2.textContent = "Booking: airbnb.com/rooms/48213"; mark(4);
-      stepBtns.forEach((b) => b.addEventListener("click", () => go(+b.dataset.step)));
-    } else {
-      whenVisible(root, start, stop);
-    }
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+      if (e.isIntersecting) { const k = items.indexOf(e.target); if (k !== -1 && k !== current) show(k); }
+    }), { root: track, threshold: .6 });
+    items.forEach((li) => io.observe(li));
+    dots.forEach((d, k) => d.addEventListener("click", () => glide(k)));
+    prev.addEventListener("click", () => glide(Math.max(0, current - 1)));
+    next.addEventListener("click", () => glide(Math.min(items.length - 1, current + 1)));
+    show(0);
   })();
 
-  // ---------- Types gallery ----------
-  (function types() {
-    const el = $("[data-types]");
-    if (!el) return;
-    const rows = [
-      ["flight", "Text", "Plain text keeps its line breaks. The footer counts characters; the preview shows the first 20 000."],
-      ["quote", "Rich text", "Fonts, bold, lists and the text's own background colour survive. ⇧↩ pastes it plain."],
-      ["cabin", "Link", "The page's title, domain and preview image, fetched the way a browser would. ⌘O opens it."],
-      ["photo", "Image", "The image itself, with its pixel size. Previews show it full size; the clipboard gets the original."],
-      ["deck", "File", "Files copied in Finder, with their icon, name and path. ⌘O opens; Reveal in Finder from the menu."],
-      ["brand", "Colour", "A #RRGGBB value fills the whole card and reads in light or dark text, whichever is legible."],
-    ];
-    el.innerHTML = rows.map(([id, name, text], i) => `<figure>${card(byId[id], { selected: i === 2 })}<figcaption><b>${name}</b>${text}</figcaption></figure>`).join("");
-  })();
-
-  // ---------- Search playground ----------
-  (function search() {
-    const input = $("[data-search-input]"), box = $("[data-searchbox]"), tokens = $("[data-search-tokens]"), cards = $("[data-search-cards]"), count = $("[data-search-count]");
-    if (!input) return;
-    const FILTERS = ["app", "type", "title", "date", "device", "pinboard"];
-    const TYPE = { text: "text", texts: "text", rich: "text", richtext: "text", html: "text", link: "link", links: "link", url: "link", urls: "link", image: "image", images: "image", picture: "image", pictures: "image", photo: "image", photos: "image", file: "file", files: "file", color: "color", colors: "color", colour: "color", colours: "color" };
-    const KIND = { text: "text", rich: "text", link: "link", image: "image", files: "file", color: "color" };
-    const DATES = { today: ["today"], yesterday: ["yesterday"], thisweek: ["today", "yesterday", "week"], last7days: ["today", "yesterday", "week"], thismonth: ["today", "yesterday", "week", "month"], last30days: ["today", "yesterday", "week", "month"], thisyear: ["today", "yesterday", "week", "month", "older"] };
-
-    function parse(text) {
-      const words = [], re = /"([^"]*)"?|(\S+)/g; let m;
-      while ((m = re.exec(text))) words.push({ t: m[1] !== undefined ? m[1] : m[2], q: m[1] !== undefined });
-      const comps = [];
-      for (const w of words) {
-        const c = w.t.indexOf(":");
-        if (!w.q && c > 0 && FILTERS.includes(w.t.slice(0, c).toLowerCase())) {
-          let v = w.t.slice(c + 1).replace(/^"|"$/g, "");
-          if (v) comps.push({ f: w.t.slice(0, c).toLowerCase(), v });
-        } else if (w.t) comps.push({ tok: w.t });
+  // ---------- Use-case tabs ----------
+  (function tabs() {
+    const box = $("[data-usecases]");
+    if (!box) return;
+    const seg = $(".seg", box);
+    const btns = $$("[role=tab]", seg);
+    const panel = $("[role=tabpanel]", box);
+    const caps = $$(".uc-cap", box);
+    const shots = $$(".uc-shot", box);
+    let index = 0;
+    const place = () => {
+      const b = btns[index];
+      seg.style.setProperty("--seg-x", `${b.offsetLeft}px`);
+      seg.style.setProperty("--seg-w", `${b.offsetWidth}px`);
+    };
+    function select(i, focus) {
+      index = (i + btns.length) % btns.length;
+      btns.forEach((b, k) => { b.setAttribute("aria-selected", String(k === index)); b.tabIndex = k === index ? 0 : -1; });
+      panel.setAttribute("aria-labelledby", btns[index].id);
+      caps.forEach((c, k) => { const on = k === index; c.classList.toggle("on", on); c.inert = !on; c.toggleAttribute("aria-hidden", !on); });
+      shots.forEach((s, k) => { const on = k === index; s.classList.toggle("on", on); s.toggleAttribute("aria-hidden", !on); });
+      place();
+      if (focus) {
+        const b = btns[index];
+        b.focus({ preventScroll: true });
+        // Keep the chosen tab inside the pill bar when it scrolls sideways on a phone.
+        if (b.offsetLeft < seg.scrollLeft) seg.scrollLeft = b.offsetLeft - 4;
+        else if (b.offsetLeft + b.offsetWidth > seg.scrollLeft + seg.clientWidth) seg.scrollLeft = b.offsetLeft + b.offsetWidth - seg.clientWidth + 4;
       }
-      return comps;
     }
-    const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-    function textOf(i) { return [i.title, i.text, i.ltitle, i.url, i.name, i.path, i.hex, i.html?.replace(/<[^>]+>/g, " ")].filter(Boolean).join(" "); }
-    function matches(i, comps) {
-      const groups = {};
-      for (const c of comps) {
-        if (c.tok) { const words = norm(textOf(i)).split(/[^\p{L}\p{N}#]+/u); if (!words.some((w) => w.startsWith(norm(c.tok)))) return false; continue; }
-        (groups[c.f] ||= []).push(c.v);
-      }
-      for (const [f, vs] of Object.entries(groups)) {
-        const ok = vs.some((v) => {
-          const n = norm(v);
-          if (f === "app") return norm(APPS[i.app].name).startsWith(n);
-          if (f === "type") return TYPE[n] === KIND[i.kind];
-          if (f === "device") return norm(i.device).startsWith(n);
-          if (f === "pinboard") return (i.pins || []).some((p) => norm(PINBOARDS.find((b) => b.id === p).name) === n);
-          if (f === "title") return !!i.title && norm(i.title).includes(n);
-          if (f === "date") { const k = n.replace(/[\s_-]/g, ""); return (DATES[k] || []).includes(i.date); }
-          return false;
-        });
-        if (!ok) return false;
-      }
-      return true;
-    }
-    function run() {
-      const comps = parse(input.value);
-      box.classList.toggle("has", input.value.length > 0);
-      tokens.innerHTML = comps.filter((c) => c.f).map((c) => `<span class="tok" style="--hdr:${c.f === "pinboard" ? PIN_COLORS[(PINBOARDS.find((b) => norm(b.name) === norm(c.v)) || {}).color] || "var(--ink-3)" : "var(--ink-3)"}"><i></i>${esc(c.f)}:${esc(c.v)}</span>`).join("");
-      const hits = ITEMS.filter((i) => matches(i, comps));
-      cards.innerHTML = hits.length ? hits.map((i) => card(i)).join("") : `<div class="empty" style="width:100%">Nothing found</div>`;
-      count.textContent = comps.length ? `${hits.length} of ${ITEMS.length} items match. Nothing you type here is saved.` : `${ITEMS.length} items in this demo history. Nothing you type here is saved.`;
-    }
-    input.addEventListener("input", run);
-    $("[data-search-clear]").addEventListener("click", () => { input.value = ""; run(); input.focus(); });
-    $$("[data-search-try] button").forEach((b) => b.addEventListener("click", () => { input.value = b.dataset.q; run(); input.focus(); }));
-    input.addEventListener("keydown", (e) => { if (e.key === "Escape") { input.value = ""; run(); } });
-    run();
-  })();
-
-  // ---------- Pinboards ----------
-  (function pinboards() {
-    const demo = $("[data-pin-demo]");
-    if (!demo) return;
-    const tabsEl = $("[data-pin-tabs]", demo), cardsEl = $("[data-pin-cards]", demo), status = $("[data-pin-status]", demo), pop = $("[data-pin-pop]", demo), nameIn = $("[data-pin-name]", demo), colorsEl = $("[data-pin-colors]", demo);
-    const boards = PINBOARDS.map((b) => ({ ...b }));
-    const extra = { id: "recipes", name: "Recipes", color: "pink", items: ["quote", "reply"] };
-    let lists = [{ id: "history", name: "Clipboard" }].concat(boards), cur = 0, created = false;
-
-    function itemsFor(list) {
-      if (list.id === "history") return ITEMS.slice(0, 7);
-      if (list.id === extra.id) return extra.items.map((id) => byId[id]);
-      return ITEMS.filter((i) => (i.pins || []).includes(list.id));
-    }
-    function draw() {
-      tabsEl.innerHTML = lists.map((l, i) => l.id === "history"
-        ? `<button class="tab${i === cur ? " on" : ""}" type="button" data-i="${i}"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5M12 7v5l3 2"/></svg>Clipboard</button>`
-        : `<button class="tab${i === cur ? " on" : ""}" type="button" data-i="${i}" style="--c:${PIN_COLORS[l.color]}"><i class="dot"></i>${esc(l.name)}</button>`).join("") + `<button class="tab add" type="button" data-pin-plus aria-label="Create pinboard">+</button>`;
-      const list = lists[cur];
-      const items = itemsFor(list);
-      cardsEl.innerHTML = items.length ? items.map((i) => card(i, { pinboard: list.id === "history" ? null : list.id, extraPinboards: [extra] })).join("") : `<div class="empty" style="width:100%">Pinboard is empty</div>`;
-      status.innerHTML = list.id === "history" ? `<b>Clipboard</b> · the history, headers in app colours` : `<b>${esc(list.name)}</b> · ${items.length} pinned · headers take the pinboard colour`;
-      $$("[data-i]", tabsEl).forEach((b) => b.addEventListener("click", () => { cur = +b.dataset.i; pop.classList.remove("on"); draw(); }));
-      $("[data-pin-plus]", tabsEl).addEventListener("click", add);
-    }
-    function add() {
-      if (!created) { created = true; lists.push({ ...extra }); }
-      cur = lists.length - 1; draw(); pop.classList.add("on"); nameIn.value = lists[cur].name; nameIn.focus(); nameIn.select();
-      colorsEl.innerHTML = Object.entries(PIN_COLORS).map(([k, v]) => `<button type="button" class="${lists[cur].color === k ? "on" : ""}" style="--c:${v}" data-c="${k}" aria-label="${k}"><i></i></button>`).join("");
-      $$("[data-c]", colorsEl).forEach((b) => b.addEventListener("click", () => { lists[cur].color = b.dataset.c; extra.color = b.dataset.c; draw(); pop.classList.add("on"); $$("[data-c]", colorsEl).forEach((x) => x.classList.toggle("on", x === b)); }));
-    }
-    nameIn.addEventListener("input", () => { if (lists[cur].id === extra.id) { lists[cur].name = nameIn.value || "Pinboard"; extra.name = lists[cur].name; const t = $$("[data-i]", tabsEl)[cur]; if (t) t.lastChild.textContent = lists[cur].name; status.innerHTML = `<b>${esc(lists[cur].name)}</b> · rename it, pick a colour`; } });
-    nameIn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === "Escape") { pop.classList.remove("on"); demo.focus(); } });
-    const step = (d) => { cur = (cur + d + lists.length) % lists.length; pop.classList.remove("on"); draw(); };
-    $("[data-pin-prev]", demo).addEventListener("click", () => step(-1));
-    $("[data-pin-next]", demo).addEventListener("click", () => step(1));
-    $("[data-pin-add]", demo).addEventListener("click", add);
-    demo.addEventListener("keydown", (e) => {
-      if (e.target === nameIn) return;
-      if ((e.metaKey || e.ctrlKey) && e.key === "ArrowRight") { e.preventDefault(); step(1); }
-      if ((e.metaKey || e.ctrlKey) && e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+    btns.forEach((b, k) => {
+      b.addEventListener("click", () => select(k, false));
+      b.addEventListener("keydown", (e) => {
+        const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+        if (d) { e.preventDefault(); select(index + d, true); }
+        else if (e.key === "Home") { e.preventDefault(); select(0, true); }
+        else if (e.key === "End") { e.preventDefault(); select(btns.length - 1, true); }
+      });
     });
-    document.addEventListener("click", (e) => { if (!pop.contains(e.target) && !e.target.closest("[data-pin-plus],[data-pin-add]")) pop.classList.remove("on"); });
-    draw();
+    select(0, false);
+    new ResizeObserver(place).observe(seg);
+    requestAnimationFrame(() => seg.setAttribute("data-ready", ""));
   })();
 
-  // ---------- Paste Stack ----------
-  (function stack() {
-    const demo = $("[data-stack-demo]");
-    if (!demo) return;
-    const list = $("[data-stack-list]", demo), empty = $("[data-stack-empty]", demo), fields = $$("[data-field]", demo), status = $("[data-stack-status]", demo), steps = $$("[data-stack-steps] li");
-    const ICON = { text: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h12M4 18h8"/></svg>', link: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>' };
-    const ITEMS3 = [{ t: "Priya Natarajan", k: "text" }, { t: "priya@example.com", k: "link" }, { t: "Rua Garrett 73, 1200-203 Lisboa", k: "text" }];
-    const STATES = [
-      { stack: [], filled: 0, focus: -1, text: "The clipboard works as usual. Press <b>⇧⌘C</b> to start a Paste Stack." },
-      { stack: [], filled: 0, focus: -1, text: "<b>Paste Stack</b> panel opened, empty. Everything you copy now lands in it." },
-      { stack: [0, 1, 2], filled: 0, focus: -1, text: "Copied the name, the email, the address from the spreadsheet. Three rows, in order." },
-      { stack: [1, 2], filled: 1, focus: 0, text: "Clicked into <b>Name</b>, pressed <b>⌘V</b>: the first item is pasted and leaves the stack." },
-      { stack: [], filled: 3, focus: 2, text: "<b>⇥ ⌘V</b>, <b>⇥ ⌘V</b>: email, then address. The stack is empty." },
-      { stack: null, filled: 3, focus: -1, text: "<b>⇧⌘C</b> closes the panel. ⌘V is a normal paste again." },
-    ];
-    let i = 0, timer = null;
-    function draw() {
-      const s = STATES[i];
-      demo.querySelector(".stack-panel").style.opacity = s.stack === null || i === 0 ? 0.35 : 1;
-      list.innerHTML = (s.stack || []).map((n, idx) => `<li class="${idx === 0 && s.filled > 0 ? "next" : ""}">${ICON[ITEMS3[n].k]}<span>${esc(ITEMS3[n].t)}</span></li>`).join("");
-      empty.style.display = s.stack && s.stack.length ? "none" : "";
-      fields.forEach((f, n) => { const was = f.textContent; f.textContent = n < s.filled ? ITEMS3[n].t : ""; f.classList.toggle("focus", n === s.focus); f.classList.toggle("filled", n < s.filled && was !== ITEMS3[n].t); });
-      status.innerHTML = s.text;
-      steps.forEach((li, n) => li.classList.toggle("on", n === i - 1));
-    }
-    const go = (n) => { i = (n + STATES.length) % STATES.length; draw(); };
-    $("[data-stack-next]", demo).addEventListener("click", () => { stopPlay(); go(i + 1); });
-    $("[data-stack-prev]", demo).addEventListener("click", () => { stopPlay(); go(i - 1); });
-    const playBtn = $("[data-stack-play]", demo);
-    function stopPlay() { if (timer) { clearInterval(timer); timer = null; playBtn.textContent = "Play"; } }
-    playBtn.addEventListener("click", () => { if (timer) return stopPlay(); go(0); playBtn.textContent = "Stop"; timer = setInterval(() => { if (i === STATES.length - 1) return stopPlay(); go(i + 1); }, 1700); });
-    whenVisible(demo, () => {}, stopPlay);
-    draw();
-  })();
-
-  // ---------- Paste anywhere ----------
-  (function paste() {
-    const demo = $("[data-paste-demo]");
-    if (!demo) return;
-    const cards = $("[data-paste-cards]", demo), strip = $("[data-paste-strip]", demo);
-    const ids = ["addr", "flight", "cabin", "photo", "brand", "rebase", "deck", "quote", "repo"];
-    cards.innerHTML = ids.map((id, n) => card(byId[id], { number: n + 1, plain: true, selected: n === 0 })).join("");
-    $$("[data-hold]", demo).forEach((b) => b.addEventListener("click", () => {
-      const on = b.getAttribute("aria-pressed") !== "true";
-      $$("[data-hold]", demo).forEach((x) => x.setAttribute("aria-pressed", "false"));
-      b.setAttribute("aria-pressed", String(on));
-      strip.classList.toggle("show-badges", on && b.dataset.hold === "cmd");
-      strip.classList.toggle("show-plain", on && b.dataset.hold === "shift");
-    }));
-    $$("[data-mode]", demo).forEach((b) => b.addEventListener("click", () => {
-      $$("[data-mode]", demo).forEach((x) => { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", String(x === b)); });
-    }));
-  })();
-
-  // ---------- Hot corner peek ----------
-  (function peek() {
-    const demo = $("[data-peek-demo]");
-    if (!demo) return;
-    const strip = $("[data-peek-strip]", demo), corner = $("[data-peek-corner]", demo), pointer = $("[data-peek-pointer]", demo), status = $("[data-peek-status]", demo);
-    strip.innerHTML = ["addr", "cabin", "photo"].map((id) => card(byId[id])).join("");
+  // ---------- Product demos ----------
+  // Each demo is a timeline that plays while at least half of it is on screen, the way the reference's videos do:
+  // one-shot demos rewind when they leave, the looping one pauses and carries on. Phones and Reduce Motion get the
+  // still picture (the reference shows a still image there too).
+  const wide = matchMedia("(min-width: 40rem)");
+  function timeline(el, { length, steps, reset, loop = false }) {
     let timers = [];
-    const at = (ms, fn) => timers.push(setTimeout(fn, reduced ? 0 : ms));
+    let pos = 0;
+    let startedAt = 0;
+    let playing = false;
+    let ended = false;
+    let touched = false;
+    const clear = () => { timers.forEach(clearTimeout); timers = []; };
     function play() {
-      timers.forEach(clearTimeout); timers = [];
-      strip.classList.remove("on"); corner.classList.remove("on"); pointer.style.left = "60%"; pointer.style.top = "40%";
-      status.textContent = "Move the pointer into the corner…";
-      at(600, () => { pointer.style.left = "0.5%"; pointer.style.top = "95%"; });
-      at(1600, () => { corner.classList.add("on"); status.textContent = "Resting in the bottom-left corner."; });
-      at(1900, () => { strip.classList.add("on"); status.textContent = "The peek slides out: your three latest items, no shortcut."; });
-      at(4200, () => { pointer.style.left = "55%"; pointer.style.top = "45%"; });
-      at(5300, () => { strip.classList.remove("on"); corner.classList.remove("on"); status.textContent = "Move away and it's gone 0.6 s later. Replay to see it again."; });
+      if (playing || ended) return;
+      if (pos === 0) reset();
+      touched = true;
+      playing = true;
+      startedAt = performance.now() - pos;
+      steps.forEach(([at, fn]) => { if (pos === 0 ? at >= 0 : at > pos) timers.push(setTimeout(fn, at - pos)); });
+      timers.push(setTimeout(() => {
+        clear();
+        playing = false;
+        pos = 0;
+        if (loop) play(); else ended = true;
+      }, length - pos));
     }
-    $("[data-peek-replay]", demo).addEventListener("click", play);
-    if (reduced) { strip.classList.add("on"); corner.classList.add("on"); pointer.style.left = "0.5%"; pointer.style.top = "95%"; status.textContent = "The pointer rests in the corner and the peek shows."; }
-    else whenVisible(demo, play, () => { timers.forEach(clearTimeout); });
+    function pause() {
+      clear();
+      if (loop) { if (playing) pos = performance.now() - startedAt; }
+      else { pos = 0; ended = false; if (touched) reset(); }
+      playing = false;
+    }
+    new IntersectionObserver(([e]) => {
+      if (e.intersectionRatio >= .499 && wide.matches) play(); else pause();
+    }, { threshold: [0, .5] }).observe(el);
+  }
+  const later = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+  // Puts a demo pointer over the middle of an element (positions are relative to the pointer's screen).
+  function point(cursor, target, dx = 0, dy = 0) {
+    const box = cursor.parentElement.getBoundingClientRect();
+    const r = target.getBoundingClientRect();
+    cursor.style.left = `${r.left - box.left + r.width / 2 + dx}px`;
+    cursor.style.top = `${r.top - box.top + r.height / 2 + dy}px`;
+  }
+  const press = (el) => { el.classList.add("press"); setTimeout(() => el.classList.remove("press"), 140); };
+  function setSearch(strip, { tokens = [], q = "" }) {
+    $(".tb", strip).classList.add("is-search");
+    $(".sfield", strip).classList.add("focus");
+    $(".sf-in", strip).innerHTML = tokens.map(TOKEN).join("") + `<span class="q">${esc(q)}</span>`;
+  }
+  function suggest(strip, rows) {
+    const box = $(".sugg", strip);
+    if (!rows) { box.classList.remove("on"); return; }
+    const icon = (k) => (PINS[k] ? `<i style="--c:${PINS[k].c}"></i>` : k === "link" ? '<svg><use href="#i-link"/></svg>' : k === "date" ? '<svg><use href="#ic-calendar"/></svg>' : `<svg><use href="#${APPS[k].icon}"/></svg>`);
+    box.innerHTML = rows.map(([k, label], i) => `<span class="${i === 0 ? "hi" : ""}">${icon(k)}${label}</span>`).join("");
+    box.style.left = `${$(".sfield", strip).offsetLeft}px`;
+    box.classList.add("on");
+  }
+  function swap(strip, ids, o = {}) {
+    const row = $(".cards", strip);
+    row.classList.add("fade");
+    setTimeout(() => {
+      row.innerHTML = cardsHTML(ids, o);
+      row.classList.toggle("slide-in", !!o.slide);
+      $$(".card", row).forEach((c, i) => { c.style.animationDelay = `${i * 60}ms`; });
+      row.classList.remove("fade");
+    }, 250);
+  }
+
+  // Direct paste: 8.3 s loop.
+  (function film() {
+    const el = $("[data-film]");
+    if (!el) return;
+    const strip = $(".film-strip", el);
+    const select = (id) => $$(".card", strip).forEach((c) => c.classList.toggle("sel", c.dataset.id === id));
+    const still = () => { el.classList.add("up"); select("cabin"); };
+    if (reduced) { still(); return; }
+    wide.addEventListener("change", (m) => { if (!m.matches) still(); });
+    if (!wide.matches) still();
+    const on = (...c) => () => el.classList.add(...c);
+    const off = (...c) => () => el.classList.remove(...c);
+    timeline(el, {
+      length: 8300,
+      loop: true,
+      reset() {
+        el.classList.add("snap");
+        el.classList.remove("key", "up", "zoom", "mail", "link", "cur", "press");
+        select("list");
+        void el.offsetWidth;
+        el.classList.remove("snap");
+      },
+      steps: [
+        [0, off("fade")],
+        [500, on("key")], [800, on("up")], [1700, off("key")],
+        [2900, on("zoom")], [3700, on("cur")],
+        [4900, () => { el.classList.add("press"); select("cabin"); }], [5040, off("press")], [5200, on("press")], [5340, off("press")],
+        [5600, () => { el.classList.remove("up", "zoom", "cur"); el.classList.add("mail"); }],
+        [6000, on("link")],
+        [7800, on("fade")],
+      ],
+    });
   })();
 
-  // ---------- Sync diagram ----------
-  whenVisible($("[data-sync]"), () => $("[data-sync]").classList.add("run"), () => $("[data-sync]").classList.remove("run"));
+  if (!reduced) {
+    // Slide 1: five new copies land at the front of the strip, then it rewinds.
+    (function slide1() {
+      const stage = $(".s1-stage");
+      if (!stage) return;
+      const strip = $(".strip", stage);
+      const add = (id) => () => {
+        const w = document.createElement("span");
+        w.className = "ins";
+        w.innerHTML = card(id);
+        $(".cards", strip).prepend(w);
+        later(() => w.classList.add("in"));
+      };
+      const rewind = () => $$(".ins", strip).forEach((w) => { w.classList.add("out"); w.classList.remove("in"); });
+      timeline(stage, {
+        length: 7000,
+        reset: () => $$(".ins", strip).forEach((w) => w.remove()),
+        steps: [[600, add("quote")], [1500, add("tram")], [2500, add("flight")], [3500, add("repo")], [4400, add("addr")], [5300, rewind], [6200, () => $$(".ins", strip).forEach((w) => w.remove())]],
+      });
+    })();
+
+    // Slide 2: click the magnifier, type, pick a filter token twice; the results change each time.
+    (function slide2() {
+      const stage = $(".s2-stage");
+      if (!stage) return;
+      const strip = $(".strip", stage);
+      const cur = $(".demo-cursor", stage);
+      timeline(stage, {
+        length: 7000,
+        reset() {
+          delete strip.dataset.search;
+          strip.dataset.tabs = "clip,travel,work,snippets,plus";
+          strip.dataset.cards = "cabin,photo,deck";
+          renderStrip(strip);
+          cur.classList.remove("on", "press");
+          cur.style.left = ""; cur.style.top = "";
+        },
+        steps: [
+          [200, () => cur.classList.add("on")],
+          [300, () => point(cur, $(".sfield svg", strip), 4, 6)],
+          [1000, () => press(cur)],
+          [1100, () => setSearch(strip, {})],
+          [1500, () => cur.classList.remove("on")],
+          [2100, () => { setSearch(strip, { q: "L" }); suggest(strip, [["link", "Link"], ["date", "Last 7 days"]]); }],
+          [3400, () => { suggest(strip, null); setSearch(strip, { tokens: ["link"] }); swap(strip, "cabin,lisbon,repo"); }],
+          [4600, () => { setSearch(strip, { tokens: ["link"], q: "S" }); suggest(strip, [["safari", "Safari"], ["snippets", "Snippets"], ["shortcuts", "Shortcuts"]]); }],
+          [5300, () => { suggest(strip, null); setSearch(strip, { tokens: ["link", "safari"] }); swap(strip, ""); }],
+          [5800, () => swap(strip, "lake,chart-link,ceramic-link")],
+        ],
+      });
+    })();
+
+    // Slide 3: drag a card onto the Snippets tab, then open the pinboard.
+    (function slide3() {
+      const stage = $(".s3-stage");
+      if (!stage) return;
+      const scr = $(".scr", stage);
+      const strip = $(".strip", stage);
+      const cur = $(".demo-cursor", stage);
+      let ghost = null;
+      const tab = () => $('.tab[data-tab="snippets"]', strip);
+      const picked = () => $('.card[data-id="reply"]', strip);
+      timeline(stage, {
+        length: 7000,
+        reset() {
+          strip.dataset.tabs = "clip,travel,work,snippets,plus";
+          delete strip.dataset.pin;
+          strip.dataset.cards = "note,reply,cabin,swift,photo,brand";
+          strip.dataset.sel = "";
+          renderStrip(strip);
+          if (ghost) { ghost.remove(); ghost = null; }
+          cur.classList.remove("on", "press");
+          cur.style.left = ""; cur.style.top = "";
+        },
+        steps: [
+          [300, () => { cur.classList.add("on"); point(cur, picked(), 10, 10); }],
+          [1200, () => { press(cur); picked().classList.add("lift"); }],
+          [1450, () => {
+            const c = picked();
+            const box = scr.getBoundingClientRect();
+            const r = c.getBoundingClientRect();
+            const t = tab().getBoundingClientRect();
+            ghost = document.createElement("div");
+            ghost.className = "ghost";
+            ghost.style.cssText = `left:${r.left - box.left}px;top:${r.top - box.top}px;--side:${r.width}px`;
+            ghost.innerHTML = card("reply");
+            scr.appendChild(ghost);
+            c.classList.remove("lift");
+            c.classList.add("dim");
+            later(() => { ghost.style.transform = `translate(${t.left - r.left + t.width / 2 - r.width * .2}px, ${t.top - r.top}px) scale(.4)`; });
+            point(cur, tab(), 6, 6);
+          }],
+          [2250, () => tab().classList.add("drop")],
+          [2450, () => {
+            ghost.style.opacity = "0";
+            const t = tab();
+            t.classList.remove("drop");
+            t.classList.add("pulse");
+            picked().classList.remove("dim");
+          }],
+          [3600, () => press(cur)],
+          [3700, () => {
+            $$(".tab", strip).forEach((x) => x.classList.toggle("on", x.dataset.tab === "snippets"));
+            swap(strip, "reply,rebase,swift,repo,sign,brand", { pin: "snippets", sel: "reply", slide: true });
+          }],
+          [4400, () => cur.classList.remove("on")],
+        ],
+      });
+    })();
+
+    // Slide 4: the copied link rises and the three Macs it syncs to appear.
+    (function slide4() {
+      const stage = $(".s4-stage");
+      if (!stage) return;
+      timeline(stage, { length: 5000, reset: () => stage.classList.remove("go"), steps: [[700, () => stage.classList.add("go")]] });
+    })();
+
+    // The orb at the centre of the MCP plate: drifts on its own, livens up and leans towards a nearby pointer.
+    (function orb() {
+      const el = $(".orb");
+      if (!el) return;
+      const a = $(".orb-a", el);
+      const b = $(".orb-b", el);
+      const lerp = (x, y, t) => x + (y - x) * t;
+      let raf = 0;
+      let last = 0;
+      let phase = 0;
+      let ex = 0;
+      let sc = 1;
+      let ptr = null;
+      const pos = [0, 0];
+      const vel = [0, 0];
+      addEventListener("pointermove", (e) => { ptr = [e.clientX, e.clientY]; }, { passive: true });
+      document.documentElement.addEventListener("pointerleave", () => { ptr = null; });
+      const shape = (p, k) => {
+        const r = (i) => 50 + 7 * k * Math.sin(2 * Math.PI * (p * (1 + i * .13) + i * .37));
+        return `${r(0)}% ${100 - r(0)}% ${r(1)}% ${100 - r(1)}% / ${r(2)}% ${r(3)}% ${100 - r(3)}% ${100 - r(2)}%`;
+      };
+      function frame(now) {
+        const dt = Math.min(.05, (now - (last || now)) / 1000);
+        last = now;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2 - pos[0];
+        const cy = r.top + r.height / 2 - pos[1];
+        const radius = r.width / 2 / sc;
+        let inside = false;
+        const target = [0, 0];
+        if (ptr) {
+          const dx = ptr[0] - cx;
+          const dy = ptr[1] - cy;
+          inside = Math.hypot(dx, dy) < 1.9 * radius;
+          if (inside) { target[0] = dx * .205; target[1] = dy * .205; }
+        }
+        ex += ((inside ? 1 : 0) - ex) * (1 - Math.exp(-dt / .3));
+        const live = lerp(.6, 1, ex);
+        sc = lerp(1, 1.2, ex);
+        phase += dt / lerp(2.5, 1.8, ex);
+        const w = 2 * Math.PI * 2.5;
+        for (const k of [0, 1]) { vel[k] += (w * w * (target[k] - pos[k]) - 2 * .6 * w * vel[k]) * dt; pos[k] += vel[k] * dt; }
+        a.style.borderRadius = shape(phase, live);
+        a.style.rotate = `${Math.sin(2 * Math.PI * phase * .5) * 8 * live}deg`;
+        b.style.borderRadius = shape(phase + .5, live);
+        el.style.transform = `translate(${pos[0].toFixed(2)}px, ${pos[1].toFixed(2)}px) scale(${sc.toFixed(3)})`;
+        raf = requestAnimationFrame(frame);
+      }
+      new IntersectionObserver(([e]) => {
+        if (e.isIntersecting && !raf) { last = 0; raf = requestAnimationFrame(frame); }
+        else if (!e.isIntersecting && raf) { cancelAnimationFrame(raf); raf = 0; }
+      }, { rootMargin: "200px" }).observe(el);
+    })();
+  }
+
+  // ---------- Copy the install command ----------
+  $$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    const status = $("[data-copy-status]");
+    const text = b.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(text);
+      b.textContent = "Copied";
+      if (status) status.textContent = "Copied to the clipboard.";
+    } catch (e) {
+      const codeEl = b.parentElement.querySelector("code");
+      if (codeEl) { const r = document.createRange(); r.selectNodeContents(codeEl); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      if (status) status.textContent = "Press ⌘C to copy.";
+    }
+    setTimeout(() => { b.textContent = "Copy"; if (status) status.textContent = ""; }, 2000);
+  }));
 })();
