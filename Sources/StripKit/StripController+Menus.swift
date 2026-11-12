@@ -99,7 +99,7 @@ extension StripController {
         let objects: [Any] = items.compactMap { item -> Any? in
             switch item.kind {
             case .link: return ItemPresentation.linkURL(item)
-            case .files: return item.filePaths.first.map { URL(fileURLWithPath: $0) }
+            case .files: return SandboxFileAccess.urls(Array(item.filePaths.prefix(1))).first
             case .image: return ItemAssets.shared.fullImage(for: item)
             case .unknown: return nil
             default: return item.text.isEmpty ? nil : item.text

@@ -359,7 +359,7 @@ final class PreviewViewController: NSViewController, NSTextFieldDelegate {
     private func share(from view: NSView) {
         let object: Any? = switch item.kind {
         case .link: ItemPresentation.linkURL(item)
-        case .files: item.filePaths.first.map { URL(fileURLWithPath: $0) }
+        case .files: SandboxFileAccess.urls(Array(item.filePaths.prefix(1))).first
         case .image: ItemAssets.shared.fullImage(for: item)
         default: item.text
         }
@@ -916,8 +916,9 @@ final class FilesPreviewBody: PreviewBody {
     required init(item: ClipItem, style: SPStyle, editing: Bool) {
         self.item = item
         super.init(item: item, style: style, editing: editing)
-        if let first = item.filePaths.first, let view = QLPreviewView(frame: .zero, style: .normal) {
-            view.previewItem = URL(fileURLWithPath: first) as NSURL
+        if let first = SandboxFileAccess.urls(Array(item.filePaths.prefix(1))).first,
+           let view = QLPreviewView(frame: .zero, style: .normal) {
+            view.previewItem = first as NSURL
             view.autostarts = true
             addSubview(view)
             quickLook = view
@@ -941,7 +942,7 @@ final class FilesPreviewBody: PreviewBody {
         let label = Labels.make(path.isEmpty ? size : "\(path) · \(size)", font: SPFont.style(.body), color: SPColor.ink50,
                                 truncation: .byTruncatingHead)
         let reveal = ToolbarButton(size: .regular, style: style, title: L10n.revealInFinder)
-        let urls = item.filePaths.map { URL(fileURLWithPath: $0) }
+        let urls = SandboxFileAccess.urls(item.filePaths)
         reveal.action = { _ in NSWorkspace.shared.activateFileViewerSelecting(urls) }
         return ([label], [reveal])
     }

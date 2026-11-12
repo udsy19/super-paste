@@ -134,6 +134,7 @@ package enum Classifier {
     /// HTML and plain text; anything else is unknown.
     package static func analyze(_ entries: [EntryData], bundleID: String?) -> CaptureAnalysis {
         let (resolved, paths) = resolvingFileURLs(entries)
+        SandboxFileAccess.remember(paths)
         if !paths.isEmpty {
             return CaptureAnalysis(kind: .files, text: paths.joined(separator: "\n"), filePaths: paths, entries: resolved)
         }
