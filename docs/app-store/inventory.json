@@ -2,7 +2,7 @@
   "app": "Super Paste",
   "repo": "udsy19/super-paste",
   "branch": "release/macos-app-store",
-  "commit": "d7e948d (docs commit follows)",
+  "commit": "65f04e4",
   "bundleIds": {
     "direct": "com.udsy.superpaste",
     "appstore": "com.udsy.superpaste.appstore"
