@@ -99,6 +99,12 @@ public final class FolderSync: SyncServicing {
         guard fm.isWritableFile(atPath: root.path) else {
             throw SyncError.folderUnavailable("Super Paste can't write to “\(root.lastPathComponent)”.")
         }
+        #if APP_STORE
+        // Without a bookmark the sandbox closes the folder at the next launch: say so now, not then.
+        do { _ = try SecurityScopedFolder.bookmark(path: root.path) } catch {
+            throw SyncError.folderUnavailable("Super Paste can't keep access to “\(root.lastPathComponent)”: \(error.localizedDescription)")
+        }
+        #endif
         _ = try keyAndIdentity(root)
         settings.folderPath = root.path
         settings.isEnabled = true
@@ -166,6 +172,11 @@ public final class FolderSync: SyncServicing {
     /// One full pass; only `syncNow()` starts one, so passes never overlap.
     private func runPass() async {
         guard let root = folder else { statusSubject.send(.disabled); return }
+        #if APP_STORE
+        if let problem = SecurityScopedFolder.problem, settings is DefaultsSyncSettings {
+            return statusSubject.send(.error(problem))
+        }
+        #endif
         statusSubject.send(.syncing)
         problems = []
         do {

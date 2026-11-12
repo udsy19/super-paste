@@ -27,6 +27,31 @@ func registerSyncKitTests() {
                  "it resolves to the folder")
         checkNow(sync.folder != nil && FileManager.default.fileExists(atPath: folder.appendingPathComponent("key.check").path),
                  "the folder is set up through it")
+        let goodBookmark = bookmark
+
+        // A folder that moved: its bookmark is followed to the new place, path and bookmark refreshed.
+        let moved = root.appendingPathComponent("Moved")
+        try? FileManager.default.moveItem(at: folder, to: moved)
+        Defaults[.syncFolderBookmark] = goodBookmark
+        Defaults[.syncFolderPath] = root.appendingPathComponent("Old name").path
+        let follower = FolderSync(store: store, syncStore: store, keyStore: MemorySyncKeyStore(), settings: DefaultsSyncSettings(),
+                                  stateDirectory: root.appendingPathComponent("State2"), observesChanges: false)
+        let followed = follower.folder?.resolvingSymlinksInPath().path
+        checkNow(followed == moved.resolvingSymlinksInPath().path, "a moved folder is followed: \(followed ?? "nil")")
+        checkNow(Defaults[.syncFolderPath] == follower.folder?.path, "the new path is remembered")
+
+        // No bookmark (or one that doesn't resolve): the pass stops with a status that says to choose the folder again.
+        Defaults[.syncFolderBookmark] = Data()
+        Defaults[.syncFolderPath] = root.appendingPathComponent("Unbookmarked").path
+        let lost = FolderSync(store: store, syncStore: store, keyStore: MemorySyncKeyStore(), settings: DefaultsSyncSettings(),
+                              stateDirectory: root.appendingPathComponent("State3"), observesChanges: false)
+        _ = awaitMain { await lost.syncAndWait() }
+        if case .error(let message) = lost.status {
+            checkNow(message.contains("Choose it again"), "the status asks to choose the folder again: \(message)")
+        } else {
+            checkNow(false, "a folder without a bookmark is an error, not \(lost.status)")
+        }
+
         Defaults.reset(.syncFolderBookmark)
         Defaults.reset(.syncFolderPath)
         Defaults.reset(.isSyncEnabled)

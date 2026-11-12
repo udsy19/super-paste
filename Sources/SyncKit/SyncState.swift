@@ -77,7 +77,8 @@ public final class DefaultsSyncSettings: SyncSettingsStoring {
         }
         set {
             #if APP_STORE
-            Defaults[.syncFolderBookmark] = SecurityScopedFolder.bookmark(path: newValue)
+            // `FolderSync.enable` has already checked that a bookmark can be made (and reported it if not).
+            Defaults[.syncFolderBookmark] = (try? SecurityScopedFolder.bookmark(path: newValue)) ?? Data()
             #endif
             Defaults[.syncFolderPath] = newValue
         }
@@ -92,35 +93,55 @@ public final class DefaultsSyncSettings: SyncSettingsStoring {
 #if APP_STORE
 /// The sync folder in the App Sandbox: the open panel grants access for this launch only, so a security-scoped
 /// bookmark is kept next to the path and resolved (and access started, for the life of the process) on first use.
+/// A bookmark that can't be made fails `FolderSync.enable`; one that no longer resolves sets `problem`, which the
+/// Sync pane shows as the status; a stale one (the folder moved or was renamed) is made again, path included.
 @MainActor
 enum SecurityScopedFolder {
-    /// The path whose access is currently held, and the path last resolved (so a failure is logged once).
+    /// The path whose access is currently held, and the path last resolved (so it is resolved once per path).
     private static var accessing: URL?
     private static var resolvedPath: String?
+    /// Why the chosen folder can't be reached this launch; nil when it can (or none is chosen).
+    private(set) static var problem: String?
 
-    static func bookmark(path: String) -> Data {
+    static let chooseAgain = "Super Paste can no longer open the sync folder. Choose it again in Settings › Sync."
+
+    static func bookmark(path: String) throws -> Data {
         guard !path.isEmpty else { return Data() }
-        do {
-            return try URL(fileURLWithPath: path, isDirectory: true)
-                .bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-        } catch {
-            Log.sync.error("Couldn't bookmark the sync folder: \(error.localizedDescription, privacy: .public)")
-            return Data()
-        }
+        return try URL(fileURLWithPath: path, isDirectory: true)
+            .bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
     }
 
     static func resume(bookmark: Data, path: String) {
-        guard !bookmark.isEmpty, resolvedPath != path else { return }
+        guard !path.isEmpty, resolvedPath != path else { return }
         resolvedPath = path
+        problem = nil
         var stale = false
-        guard let url = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil,
+        guard !bookmark.isEmpty,
+              let url = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil,
                                  bookmarkDataIsStale: &stale) else {
-            Log.sync.error("The sync folder's bookmark no longer resolves; choose the folder again")
+            Log.sync.error("The sync folder's bookmark is missing or no longer resolves")
+            problem = chooseAgain
             return
         }
         accessing?.stopAccessingSecurityScopedResource()
         accessing = url.startAccessingSecurityScopedResource() ? url : nil
-        if stale, url.path == path { Defaults[.syncFolderBookmark] = Self.bookmark(path: path) }
+        guard accessing != nil else {
+            Log.sync.error("The sandbox refused access to the sync folder")
+            problem = chooseAgain
+            return
+        }
+        guard stale else { return }
+        // The folder moved or was renamed: remember where it is now, with a fresh bookmark.
+        do {
+            Defaults[.syncFolderBookmark] = try Self.bookmark(path: url.path)
+            if url.path != path {
+                resolvedPath = url.path
+                Defaults[.syncFolderPath] = url.path
+                Log.sync.notice("The sync folder moved; following it")
+            }
+        } catch {
+            Log.sync.error("Couldn't refresh the sync folder's bookmark: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 #endif
