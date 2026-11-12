@@ -18,6 +18,50 @@ func registerCoreTests() {
     SelfTest.cases.append(("Core.appColor", { MainActor.assumeIsolated { coreAppColor() } }))
     SelfTest.cases.append(("Core.appMenu", { MainActor.assumeIsolated { coreAppMenu() } }))
     SelfTest.cases.append(("Core.hotkeyConflicts", { MainActor.assumeIsolated { coreHotkeyConflicts() } }))
+    SelfTest.cases.append(("Core.directEditionImport", { coreDirectEditionImport() }))
+}
+
+/// The Store edition's import of the direct edition's history: copied (the source is untouched), staged, and swapped
+/// in at the next launch with the previous history kept in Backup; a folder without a history and an interrupted
+/// copy are refused.
+private func coreDirectEditionImport() {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.appendingPathComponent("superpaste-import-\(UUID().uuidString)")
+    defer { try? fm.removeItem(at: root) }
+    let direct = root.appendingPathComponent("direct/Super Paste"), base = root.appendingPathComponent("container")
+    let support = base.appendingPathComponent(SuperPastePaths.supportFolderName)
+    try? fm.createDirectory(at: direct.appendingPathComponent("Blobs/ab"), withIntermediateDirectories: true)
+    try? fm.createDirectory(at: support.appendingPathComponent("Blobs"), withIntermediateDirectories: true)
+    try? Data("direct-db".utf8).write(to: direct.appendingPathComponent("clips.sqlite"))
+    try? Data("direct-wal".utf8).write(to: direct.appendingPathComponent("clips.sqlite-wal"))
+    try? Data("blob".utf8).write(to: direct.appendingPathComponent("Blobs/ab/abcd"))
+    try? Data("mcp".utf8).write(to: direct.appendingPathComponent("clients.json"))
+    try? Data("store-db".utf8).write(to: support.appendingPathComponent("clips.sqlite"))
+
+    check((try? DirectEditionImport.stage(from: root)) == nil, "a folder without clips.sqlite is refused")
+    check((try? DirectEditionImport.applyStaged(base: base)) == false, "nothing staged, nothing applied")
+    check((try? DirectEditionImport.stage(from: direct, base: base)) != nil, "the history is staged")
+    check(DirectEditionImport.isStaged(base: base), "the staged copy is complete")
+    check(fm.fileExists(atPath: direct.appendingPathComponent("clips.sqlite").path)
+          && fm.fileExists(atPath: direct.appendingPathComponent("Blobs/ab/abcd").path), "the source is untouched")
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    check((try? DirectEditionImport.applyStaged(base: base, now: now)) == true, "the staged import is applied")
+    check((try? String(contentsOf: support.appendingPathComponent("clips.sqlite"), encoding: .utf8)) == "direct-db"
+          && (try? String(contentsOf: support.appendingPathComponent("Blobs/ab/abcd"), encoding: .utf8)) == "blob"
+          && fm.fileExists(atPath: support.appendingPathComponent("clips.sqlite-wal").path), "database, log and blobs moved in")
+    check(!fm.fileExists(atPath: support.appendingPathComponent("clients.json").path), "MCP clients are not imported")
+    let backups = (try? fm.contentsOfDirectory(at: support.appendingPathComponent("Backup"), includingPropertiesForKeys: nil)) ?? []
+    check(backups.count == 1 && (try? String(contentsOf: backups[0].appendingPathComponent("clips.sqlite"), encoding: .utf8)) == "store-db",
+          "the previous history is kept in Backup")
+    check(!fm.fileExists(atPath: DirectEditionImport.stagingFolder(base: base).path), "the staging folder is gone")
+
+    // An interrupted copy (no completion marker) is discarded, never applied.
+    let staging = DirectEditionImport.stagingFolder(base: base)
+    try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
+    try? Data("partial".utf8).write(to: staging.appendingPathComponent("clips.sqlite"))
+    check((try? DirectEditionImport.applyStaged(base: base)) == false && !fm.fileExists(atPath: staging.path)
+          && (try? String(contentsOf: support.appendingPathComponent("clips.sqlite"), encoding: .utf8)) == "direct-db",
+          "an interrupted import is discarded")
 }
 
 /// A combination another registration already holds fails and is listed as unavailable until it registers or is
@@ -94,7 +138,11 @@ private func coreModelCodable() {
 
 private func coreSettingsDefaults() {
     check(Defaults[.openAtLogin] == false && Defaults[.isStatusItemEnabled] && Defaults[.isSoundEffectsEnabled], "general toggles")
+    #if APP_STORE
+    check(!Defaults[.isDirectPasteEnabled] && !Defaults[.isPasteAsPlainTextEnabled], "Store edition: paste to clipboard, rich text")
+    #else
     check(Defaults[.isDirectPasteEnabled] && !Defaults[.isPasteAsPlainTextEnabled], "paste to active app, rich text")
+    #endif
     check(Defaults[.historyRetentionDays] == HistoryRetention.forever && !Defaults[.historyRetentionUserSet]
           && !Defaults[.isDirectPastePromptSuppressed], "Keep History forever, untouched; direct-paste prompt")
     check(Defaults[.hotCorner] == .bottomLeft, "the hot corner is the bottom-left one")

@@ -67,8 +67,18 @@ final class DefaultsSyncSettings: SyncSettingsStoring {
     }
 
     var folderPath: String {
-        get { Defaults[.syncFolderPath] }
-        set { Defaults[.syncFolderPath] = newValue }
+        get {
+            #if APP_STORE
+            SecurityScopedFolder.resume(bookmark: Defaults[.syncFolderBookmark], path: Defaults[.syncFolderPath])
+            #endif
+            return Defaults[.syncFolderPath]
+        }
+        set {
+            #if APP_STORE
+            Defaults[.syncFolderBookmark] = SecurityScopedFolder.bookmark(path: newValue)
+            #endif
+            Defaults[.syncFolderPath] = newValue
+        }
     }
 
     var lastSync: Date? {
@@ -76,3 +86,39 @@ final class DefaultsSyncSettings: SyncSettingsStoring {
         set { Defaults[.lastSyncDate] = newValue?.timeIntervalSince1970 ?? 0 }
     }
 }
+
+#if APP_STORE
+/// The sync folder in the App Sandbox: the open panel grants access for this launch only, so a security-scoped
+/// bookmark is kept next to the path and resolved (and access started, for the life of the process) on first use.
+@MainActor
+enum SecurityScopedFolder {
+    /// The path whose access is currently held, and the path last resolved (so a failure is logged once).
+    private static var accessing: URL?
+    private static var resolvedPath: String?
+
+    static func bookmark(path: String) -> Data {
+        guard !path.isEmpty else { return Data() }
+        do {
+            return try URL(fileURLWithPath: path, isDirectory: true)
+                .bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+        } catch {
+            Log.sync.error("Couldn't bookmark the sync folder: \(error.localizedDescription, privacy: .public)")
+            return Data()
+        }
+    }
+
+    static func resume(bookmark: Data, path: String) {
+        guard !bookmark.isEmpty, resolvedPath != path else { return }
+        resolvedPath = path
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil,
+                                 bookmarkDataIsStale: &stale) else {
+            Log.sync.error("The sync folder's bookmark no longer resolves; choose the folder again")
+            return
+        }
+        accessing?.stopAccessingSecurityScopedResource()
+        accessing = url.startAccessingSecurityScopedResource() ? url : nil
+        if stale, url.path == path { Defaults[.syncFolderBookmark] = Self.bookmark(path: path) }
+    }
+}
+#endif

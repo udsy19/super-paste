@@ -19,7 +19,7 @@ public final class FolderSync: SyncServicing {
     public var defaultFolder: URL? { Self.defaultFolder }
 
     public nonisolated static var defaultFolder: URL? {
-        let drive = FileManager.default.homeDirectoryForCurrentUser
+        let drive = SuperPastePaths.userHome
             .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
         guard FileManager.default.fileExists(atPath: drive.path) else { return nil }
         return drive.appendingPathComponent("Super Paste", isDirectory: true)

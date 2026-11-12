@@ -1021,6 +1021,7 @@ private func clipboardSecureInput() {
         let h = Harness()
         defer { h.finish() }
         h.trusted = true
+        Defaults[.isDirectPasteEnabled] = true  // the Mac App Store edition defaults to To clipboard
         let monitor = ClipboardMonitor(environment: h.environment)
         let paster = Paster(environment: h.environment, monitor: monitor)
         let secret = h.store.add([textEntry("hunter2")])

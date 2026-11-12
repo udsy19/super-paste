@@ -1,3 +1,4 @@
+#if !APP_STORE  // the Mac App Store edition updates through the App Store; none of this is compiled into it
 import Foundation
 import CryptoKit
 import Security
@@ -283,3 +284,4 @@ private func endToEndUpdate() {
     let lines = (try? String(contentsOf: log, encoding: .utf8))?.split(separator: "\n") ?? []
     for line in lines { print("  helper: \(line.replacingOccurrences(of: work.path, with: "<tmp>"))") }
 }
+#endif

@@ -1,3 +1,4 @@
+#if !APP_STORE  // the Mac App Store edition updates through the App Store; none of this is compiled into it
 import Foundation
 import CryptoKit
 import Security
@@ -252,3 +253,4 @@ public struct UpdateInstaller {
         exit 0
         """
 }
+#endif

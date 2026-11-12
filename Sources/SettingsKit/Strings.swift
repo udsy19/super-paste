@@ -174,7 +174,26 @@ enum Strings {
         static let updatesInfo = "Checks GitHub for a new version every few hours and installs it in the background."
         static func lastChecked(_ when: String) -> String { "Last checked \(when)." }
         static let privacy = "Privacy"
+        #if APP_STORE
+        static let privacyText = "Super Paste is local-first. Your clipboard history is stored on this Mac, with no account and no tracking. Your history never leaves this Mac unless you turn on sync or the MCP server. Link previews fetch the title of links you copy; this can be turned off."
+        static let directBundleID = "com.udsy.superpaste"
+        static let importTitle = "Import from Super Paste (direct download)"
+        static let importInfo = "Copies the history and pinboards of the version downloaded from the website into this one. The other version's files are left as they are."
+        static let importAction = "Import…"
+        static let importConfirm = "Replace this history with the imported one?"
+        static let importConfirmInfo = "Choose the “Super Paste” folder in Library › Application Support. The history here is kept in a backup folder, not deleted."
+        static let importPanelMessage = "Choose the “Super Paste” folder of the direct-download version."
+        static let importDirectRunning = "The direct-download version of Super Paste is running."
+        static let importDirectRunningInfo = "Quit it first, so the copy includes everything it saved."
+        static let importAnyway = "Import Anyway"
+        static let importFailed = "Couldn't import the history."
+        static let importStaged = "Ready to import"
+        static let importStagedInfo = "The history is copied. Open Super Paste again after it quits to finish importing."
+        static let quitNow = "Quit Now"
+        static let later = "Later"
+        #else
         static let privacyText = "Super Paste is local-first. Your clipboard history is stored on this Mac, with no account and no tracking. Your history never leaves this Mac unless you turn on sync or the MCP server. The app checks GitHub for updates, and link previews fetch the title of links you copy; both can be turned off."
+        #endif
     }
 
     enum Onboarding {
