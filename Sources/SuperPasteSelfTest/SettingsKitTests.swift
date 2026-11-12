@@ -265,13 +265,16 @@ private func settingsIgnoredApps() {
     guard let board = WelcomeContent.seedIfNeeded() else { check(false, "seeds a pinboard"); return }
     check(board.name == WelcomeContent.pinboardName && Defaults[.welcomePinboardID] == board.id.uuidString, "remembered by id")
     let items = store.search(.empty, in: .pinboard(board.id), limit: 50, offset: 0)
-    check(items.count == WelcomeContent.notes.count + WelcomeContent.links.count, "7 items: \(items.count)")
+    check(items.count == WelcomeContent.notes.count + WelcomeContent.links.count, "notes and links: \(items.count)")
     check(items.allSatisfy { $0.copiedAt == nil && $0.isPinned(to: board.id) }, "pinned-only, so history stays empty")
     check(store.count(.empty, in: .history) == 0, "nothing in history")
     let texts = items.filter { $0.kind == .text }
     check(texts.map(\.title) == WelcomeContent.notes.map(\.title) && texts.first?.text.contains("⌘O") == true, "the notes, in order")
     let links = items.filter { $0.kind == .link }
     check(links.map(\.title) == WelcomeContent.links.map(\.title), "the links, in order")
+    #if APP_STORE
+    check(!WelcomeContent.links.contains { $0.url.contains("/releases") }, "Store edition: no GitHub Releases link")
+    #endif
     check(links.allSatisfy { $0.link?.image != nil && $0.link?.title != nil }, "links carry a title and preview art")
     if let art = links.first?.link?.image, let data = store.data(for: art), let image = NSImage(data: data) {
         check(image.size.width / image.size.height == 640.0 / 360.0, "16:9 art: \(image.size)")

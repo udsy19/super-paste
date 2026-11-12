@@ -165,7 +165,10 @@ private func coreSettingsDefaults() {
     check(Defaults[.selectedListIdentifier] == "history", "opens on the history")
     check(!Defaults[.isSyncEnabled] && Defaults[.syncFolderPath].isEmpty && Defaults[.lastSyncDate] == 0, "sync off")
     check(!Defaults[.isMCPEnabled] && Defaults[.mcpPort] == 39725, "MCP off on 39725")
-    check(Defaults[.installUpdates] && !Defaults[.isOnboardingCompleted] && Defaults[.suppressedWarnings].isEmpty, "updates on")
+    #if !APP_STORE
+    check(Defaults[.installUpdates], "updates on")
+    #endif
+    check(!Defaults[.isOnboardingCompleted] && Defaults[.suppressedWarnings].isEmpty, "onboarding pending, no warnings")
 
     // Writes read back with their types.
     Defaults[.quickPasteModifierFlags] = NSEvent.ModifierFlags.option.rawValue

@@ -170,9 +170,11 @@ enum Strings {
         static let license = "Free and open source under the MIT License."
         static let github = "View on GitHub"
         static let githubURL = URL(string: "https://github.com/udsy19/super-paste")!
+        #if !APP_STORE
         static let updates = "Install updates automatically"
         static let updatesInfo = "Checks GitHub for a new version every few hours and installs it in the background."
         static func lastChecked(_ when: String) -> String { "Last checked \(when)." }
+        #endif
         static let privacy = "Privacy"
         #if APP_STORE
         static let privacyText = "Super Paste is local-first. Your clipboard history is stored on this Mac, with no account and no tracking. Your history never leaves this Mac unless you turn on sync or the MCP server. Link previews fetch the title of links you copy; this can be turned off."

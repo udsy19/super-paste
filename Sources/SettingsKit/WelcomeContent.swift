@@ -34,16 +34,24 @@ public enum WelcomeContent {
              body: "Start typing to search. Filter by content type or the source app.\n\nFor example, search for “mail link meeting slides” to find a link to the slides you copied from Mail."),
     ]
 
-    public static let links = [
+    public static let links: [Link] = [
         Link(title: "Getting Started", name: "Start using Super Paste", url: "https://udsy19.github.io/super-paste/",
              symbol: "flag.fill", colors: [NSColor(hex: "#FFD66B"), NSColor(hex: "#FF8A5B"), NSColor(hex: "#F06292")]),
         Link(title: "Help and Support", name: "Ask a question or report a problem",
              url: "https://github.com/udsy19/super-paste/issues", symbol: "lifepreserver.fill",
              colors: [NSColor(hex: "#9BE7FF"), NSColor(hex: "#5AA9FF"), NSColor(hex: "#7B6CF6")]),
+    ] + releaseNotes
+
+    /// The release-notes link points at GitHub Releases, which the Mac App Store edition doesn't update from.
+    #if APP_STORE
+    static let releaseNotes: [Link] = []
+    #else
+    static let releaseNotes = [
         Link(title: "Stay Tuned", name: "See what's new in each release",
              url: "https://github.com/udsy19/super-paste/releases", symbol: "sparkles",
              colors: [NSColor(hex: "#C9F2D2"), NSColor(hex: "#5FD68E"), NSColor(hex: "#1FA2A6")]),
     ]
+    #endif
 
     /// The seeded pinboard while it still exists.
     public static var pinboard: Pinboard? {

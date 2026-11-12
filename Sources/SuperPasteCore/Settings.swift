@@ -172,12 +172,14 @@ public extension Defaults.Keys {
     static let isMCPEnabled = Key<Bool>("isMCPEnabled", default: false)
     static let mcpPort = Key<Int>("mcpPort", default: 39725)
 
-    // MARK: Updates
+    // MARK: Updates (direct edition only; the Mac App Store edition is updated by the App Store)
 
+    #if !APP_STORE
     /// Checks GitHub Releases in the background and installs newer versions (UpdateKit).
     static let installUpdates = Key<Bool>("installUpdates", default: true)
     /// When UpdateKit last reached GitHub Releases, in seconds since 1970 (0 = never).
     static let lastUpdateCheck = Key<Double>("lastUpdateCheck", default: 0)
+    #endif
 
     // MARK: App state
 
