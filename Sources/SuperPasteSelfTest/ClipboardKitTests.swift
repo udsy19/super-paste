@@ -2,10 +2,16 @@ import AppKit
 import Combine
 import SuperPasteCore
 import ClipboardKit
+#if APP_STORE
+import ClipStore
+#endif
 
 // Owned by ClipboardKit. Every pasteboard here is a uniquely named one, released at the end of its case; the general
 // pasteboard is never read or written, no key event is posted, ⌘V is never registered, nothing is shown or played.
 func registerClipboardKitTests() {
+    #if APP_STORE
+    SelfTest.cases.append(("ClipboardKit.fileBookmarks", { MainActor.assumeIsolated { clipboardFileBookmarks() } }))
+    #endif
     SelfTest.cases.append(("ClipboardKit.install", { MainActor.assumeIsolated {
         ClipboardKitModule.install()
         check(Services.clipboard != nil && Services.pasting != nil, "monitor and pasting registered")
@@ -1055,3 +1061,50 @@ private func clipboardLayoutChange() {
         check(h.hotkeyHandler == nil, "released with the stack")
     }
 }
+
+#if APP_STORE
+/// Store edition: copied files keep a bookmark; access is held for at most `heldLimit` paths (least recently used
+/// released first); bookmarks of deleted items are dropped, and the book on disk follows.
+@MainActor
+private func clipboardFileBookmarks() {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.appendingPathComponent("superpaste-filebookmarks-\(UUID().uuidString)")
+    defer { try? fm.removeItem(at: root); SandboxFileAccess.resetForTesting() }
+    try? fm.createDirectory(at: root, withIntermediateDirectories: true)
+    SandboxFileAccess.resetForTesting()
+    let paths = (0..<(SandboxFileAccess.heldLimit + 6)).map { root.appendingPathComponent("file-\($0).txt").path }
+    for path in paths { fm.createFile(atPath: path, contents: Data(path.utf8)) }
+    SandboxFileAccess.remember(paths)
+    check(Set(SandboxFileAccess.rememberedPaths) == Set(paths), "every copied path is bookmarked")
+
+    for path in paths { _ = SandboxFileAccess.urls([path]) }
+    let held = SandboxFileAccess.heldPaths
+    check(held.count == SandboxFileAccess.heldLimit, "access held for \(SandboxFileAccess.heldLimit) paths, not \(held.count)")
+    check(held.first == paths[6] && held.last == paths.last, "the least recently used were released")
+    _ = SandboxFileAccess.urls([paths[6]])
+    _ = SandboxFileAccess.urls([paths[0]])
+    check(SandboxFileAccess.heldPaths.last == paths[0] && !SandboxFileAccess.heldPaths.contains(paths[7]),
+          "using a path again makes it most recent")
+
+    // Only the first two files remain items: the rest lose their bookmarks and access.
+    let store = ClipStoreModule.makeStore(database: root.appendingPathComponent("db.sqlite"),
+                                          blobs: root.appendingPathComponent("Blobs"), backup: root.appendingPathComponent("Backup"))
+    for path in paths.prefix(2) {
+        let entry = EntryData(reps: [RepData(type: "public.file-url", data: Data(URL(fileURLWithPath: path).absoluteString.utf8))])
+        _ = try? store.insert(ClipDraft(entries: [entry], kind: .files, text: path, filePaths: [path]))
+    }
+    ClipboardKitModule.retainFileBookmarks(in: store)
+    check(Set(SandboxFileAccess.rememberedPaths) == Set(paths.prefix(2)), "bookmarks of items that are gone are dropped")
+    check(Set(SandboxFileAccess.heldPaths).isSubset(of: Set(paths.prefix(2))), "and their access released")
+
+    SandboxFileAccess.flush()
+    SandboxFileAccess.resetForTesting()
+    check(Set(SandboxFileAccess.rememberedPaths) == Set(paths.prefix(2)), "the pruned book is what's on disk")
+    let empty = ClipStoreModule.makeStore(database: root.appendingPathComponent("empty.sqlite"),
+                                          blobs: root.appendingPathComponent("Blobs2"), backup: root.appendingPathComponent("Backup2"))
+    ClipboardKitModule.retainFileBookmarks(in: empty)
+    SandboxFileAccess.flush()
+    SandboxFileAccess.resetForTesting()
+    check(SandboxFileAccess.rememberedPaths.isEmpty, "after Erase History nothing is kept")
+}
+#endif
