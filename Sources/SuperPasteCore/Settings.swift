@@ -50,9 +50,15 @@ public enum HotCornerPolicy {
     }
 
     /// macOS's Hot Corner setting for a corner, from the Dock's preferences (nil when unset).
+    /// The Mac App Store edition can't read the Dock's preferences from its sandbox (`user-preference-read
+    /// com.apple.dock` is denied), so it never sees a conflict and keeps the user's choice.
     public static func systemAction(for corner: HotCorner) -> Int? {
+        #if APP_STORE
+        return nil
+        #else
         guard let key = corner.dockDefaultsKey, let dock = UserDefaults(suiteName: "com.apple.dock") else { return nil }
         return dock.object(forKey: key) as? Int
+        #endif
     }
 }
 

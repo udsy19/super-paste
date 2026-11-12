@@ -60,13 +60,15 @@ public protocol SyncSettingsStoring: AnyObject {
 }
 
 @MainActor
-final class DefaultsSyncSettings: SyncSettingsStoring {
-    var isEnabled: Bool {
+public final class DefaultsSyncSettings: SyncSettingsStoring {
+    public init() {}
+
+    public var isEnabled: Bool {
         get { Defaults[.isSyncEnabled] }
         set { Defaults[.isSyncEnabled] = newValue }
     }
 
-    var folderPath: String {
+    public var folderPath: String {
         get {
             #if APP_STORE
             SecurityScopedFolder.resume(bookmark: Defaults[.syncFolderBookmark], path: Defaults[.syncFolderPath])
@@ -81,7 +83,7 @@ final class DefaultsSyncSettings: SyncSettingsStoring {
         }
     }
 
-    var lastSync: Date? {
+    public var lastSync: Date? {
         get { Defaults[.lastSyncDate] > 0 ? Date(timeIntervalSince1970: Defaults[.lastSyncDate]) : nil }
         set { Defaults[.lastSyncDate] = newValue?.timeIntervalSince1970 ?? 0 }
     }

@@ -5,6 +5,33 @@ import SyncKit
 
 // Owned by SyncKit.
 func registerSyncKitTests() {
+    #if APP_STORE
+    // Store edition: turning sync on keeps a security-scoped bookmark of the folder next to its path, which resolves
+    // back to the folder (the sandbox needs it to let the folder back in after a relaunch).
+    SelfTest.cases.append(("SyncKit.folderBookmark", { MainActor.assumeIsolated {
+        // The app's settings (Defaults, the self-test's throwaway suite), but a key in memory, never the Keychain.
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("superpaste-bookmark-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("Shared")
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let store = MemoryClipStore()
+        let sync = FolderSync(store: store, syncStore: store, keyStore: MemorySyncKeyStore(), settings: DefaultsSyncSettings(),
+                              stateDirectory: root.appendingPathComponent("State"), observesChanges: false)
+        defer { sync.disable(); try? FileManager.default.removeItem(at: root) }
+        do { try sync.enable(folder: folder) } catch { checkNow(false, "sync turns on: \(error)"); return }
+        let bookmark = Defaults[.syncFolderBookmark]
+        var stale = false
+        let resolved = try? URL(resolvingBookmarkData: bookmark, options: .withSecurityScope, relativeTo: nil,
+                                bookmarkDataIsStale: &stale)
+        checkNow(!bookmark.isEmpty, "a bookmark is kept")
+        checkNow(resolved?.standardizedFileURL.resolvingSymlinksInPath().path == folder.standardizedFileURL.resolvingSymlinksInPath().path,
+                 "it resolves to the folder")
+        checkNow(sync.folder != nil && FileManager.default.fileExists(atPath: folder.appendingPathComponent("key.check").path),
+                 "the folder is set up through it")
+        Defaults.reset(.syncFolderBookmark)
+        Defaults.reset(.syncFolderPath)
+        Defaults.reset(.isSyncEnabled)
+    } }))
+    #endif
     SelfTest.cases.append(("SyncKit.install", { MainActor.assumeIsolated {
         SyncKitModule.install()
         checkNow(Services.sync != nil, "sync registered")
