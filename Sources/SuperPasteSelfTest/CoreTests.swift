@@ -37,6 +37,9 @@ private func coreDirectEditionImport() {
     try? Data("blob".utf8).write(to: direct.appendingPathComponent("Blobs/ab/abcd"))
     try? Data("mcp".utf8).write(to: direct.appendingPathComponent("clients.json"))
     try? Data("store-db".utf8).write(to: support.appendingPathComponent("clips.sqlite"))
+    try? fm.createDirectory(at: support.appendingPathComponent("Sync"), withIntermediateDirectories: true)
+    try? Data("cursors".utf8).write(to: support.appendingPathComponent("Sync/state.json"))
+    try? Data("bookmarks".utf8).write(to: support.appendingPathComponent("File Access.plist"))
 
     check((try? DirectEditionImport.stage(from: root)) == nil, "a folder without clips.sqlite is refused")
     check((try? DirectEditionImport.applyStaged(base: base)) == false, "nothing staged, nothing applied")
@@ -53,6 +56,10 @@ private func coreDirectEditionImport() {
     let backups = (try? fm.contentsOfDirectory(at: support.appendingPathComponent("Backup"), includingPropertiesForKeys: nil)) ?? []
     check(backups.count == 1 && (try? String(contentsOf: backups[0].appendingPathComponent("clips.sqlite"), encoding: .utf8)) == "store-db",
           "the previous history is kept in Backup")
+    check(!fm.fileExists(atPath: support.appendingPathComponent("Sync").path)
+          && !fm.fileExists(atPath: support.appendingPathComponent("File Access.plist").path)
+          && fm.fileExists(atPath: backups[0].appendingPathComponent("Sync/state.json").path),
+          "sync cursors and file bookmarks of the old history move to the backup (sync starts over)")
     check(!fm.fileExists(atPath: DirectEditionImport.stagingFolder(base: base).path), "the staging folder is gone")
 
     // An interrupted copy (no completion marker) is discarded, never applied.
@@ -62,6 +69,37 @@ private func coreDirectEditionImport() {
     check((try? DirectEditionImport.applyStaged(base: base)) == false && !fm.fileExists(atPath: staging.path)
           && (try? String(contentsOf: support.appendingPathComponent("clips.sqlite"), encoding: .utf8)) == "direct-db",
           "an interrupted import is discarded")
+
+    // A swap interrupted after the old history went to the backup is finished at the next launch.
+    check((try? DirectEditionImport.stage(from: direct, base: base)) != nil, "staged again")
+    try? Data("Before import resumed".utf8).write(to: staging.appendingPathComponent(".applying"))
+    let resumedBackup = support.appendingPathComponent("Backup/Before import resumed")
+    try? fm.createDirectory(at: resumedBackup, withIntermediateDirectories: true)
+    for name in ["clips.sqlite", "clips.sqlite-wal", "Blobs"] {
+        try? fm.moveItem(at: support.appendingPathComponent(name), to: resumedBackup.appendingPathComponent(name))
+    }
+    try? Data().write(to: staging.appendingPathComponent(".moved-out"))
+    try? fm.moveItem(at: staging.appendingPathComponent("clips.sqlite"), to: support.appendingPathComponent("clips.sqlite"))
+    check((try? DirectEditionImport.applyStaged(base: base)) == true, "the interrupted swap is finished")
+    check(fm.fileExists(atPath: support.appendingPathComponent("Blobs/ab/abcd").path)
+          && fm.fileExists(atPath: support.appendingPathComponent("clips.sqlite-wal").path)
+          && !fm.fileExists(atPath: staging.path) && fm.fileExists(atPath: resumedBackup.appendingPathComponent("clips.sqlite").path),
+          "everything staged is in place and the backup kept")
+
+    // Symbolic links (to files outside the chosen folder) are refused, nothing is staged.
+    let outside = root.appendingPathComponent("outside.bin")
+    try? Data("secret".utf8).write(to: outside)
+    try? fm.createSymbolicLink(at: direct.appendingPathComponent("Blobs/ab/link"), withDestinationURL: outside)
+    do {
+        try DirectEditionImport.stage(from: direct, base: base)
+        check(false, "a history with a symbolic link is refused")
+    } catch {
+        check(error as? DirectEditionImport.ImportError == .symbolicLink("Blobs/ab/link"), "refused, naming the link: \(error)")
+    }
+    check(!fm.fileExists(atPath: staging.path), "nothing staged")
+    try? fm.removeItem(at: direct.appendingPathComponent("Blobs/ab/link"))
+    try? fm.createSymbolicLink(at: direct.appendingPathComponent("clips.sqlite-shm"), withDestinationURL: outside)
+    check((try? DirectEditionImport.stage(from: direct, base: base)) == nil, "a linked database file is refused too")
 }
 
 /// A combination another registration already holds fails and is listed as unavailable until it registers or is

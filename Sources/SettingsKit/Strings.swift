@@ -183,7 +183,7 @@ enum Strings {
         static let importInfo = "Copies the history and pinboards of the version downloaded from the website into this one. The other version's files are left as they are."
         static let importAction = "Import…"
         static let importConfirm = "Replace this history with the imported one?"
-        static let importConfirmInfo = "Choose the “Super Paste” folder in Library › Application Support. The history here is kept in a backup folder, not deleted."
+        static let importConfirmInfo = "Choose the “Super Paste” folder in Library › Application Support. The history here is kept in a backup folder, not deleted. If sync is on, it starts over with the imported history."
         static let importPanelMessage = "Choose the “Super Paste” folder of the direct-download version."
         static let importDirectRunning = "The direct-download version of Super Paste is running."
         static let importDirectRunningInfo = "Quit it first, so the copy includes everything it saved."
