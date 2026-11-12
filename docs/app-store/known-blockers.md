@@ -11,8 +11,10 @@
 
 ## Needs a human run
 
-See `test-results.md` › "Needs a human run": sandboxed sync folder picker + relaunch, direct paste after granting
-post-event access, Import from the direct edition through the panel, Claude Desktop launching the bridge, Open at login.
+See `test-results.md` › "Needs a human run": global shortcut, strip and Return, hot corner, ignored-apps exclusion,
+copied-file paste after relaunch, sandboxed sync folder picker + relaunch, direct paste after granting post-event
+access, Import through the panel, Claude Desktop launching the bridge, Open at login. Results observed earlier with
+synthetic input are not counted.
 
 ## Risks for review
 
@@ -34,7 +36,8 @@ post-event access, Import from the direct edition through the panel, Claude Desk
 4. Copied files captured **before** this change or **imported** from the direct edition have no bookmark: choosing
    them pastes nothing for the file (the sandbox drops the URL). Re-copying the file fixes it. Owner may prefer a
    fallback that pastes the path as text.
-5. **Import** needs a quit and reopen; preferences, MCP clients and sync settings are not imported. TCC grants
+5. **Import** needs a quit and reopen; preferences and MCP clients are not imported, sync starts over, and a
+   history containing symbolic links is refused. TCC grants
    (pasteboard, Accessibility) must be given again for the new bundle id.
 6. Both editions use MCP port 39725 by default; running both means changing one.
 7. **Export compliance** answer for the sync encryption (AES-256-GCM).

@@ -11,7 +11,7 @@ No Xcode project, no new targets, no new dependencies.
 | Direct paste default | on | off (To clipboard); copy-only works with no permission | `Settings.swift` |
 | Sync folder | path in Defaults | path + security-scoped bookmark (`syncFolderBookmark`), resolved and accessed on first use each launch | `SyncKit/SyncState.swift` |
 | iCloud Drive default folder | `homeDirectoryForCurrentUser` | real home from `getpwuid` (`SuperPastePaths.userHome`) — used by both editions | `SuperPasteCore/Services.swift` |
-| Copied files | paths only | `SandboxFileAccess`: a bookmark per captured path (last 2,000) in `File Access.plist`; access resumed before paste/open/preview/share | `SuperPasteCore/SandboxFileAccess.swift` |
+| Copied files | paths only | `SandboxFileAccess`: a bookmark per captured path (last 2,000) in `File Access.plist`, pruned when items are deleted/erased/pruned, written off the main thread; access resumed before paste/open/preview/share and held for the 64 most recently used | `SuperPasteCore/SandboxFileAccess.swift` |
 | Dock hot-corner conflict check | reads `com.apple.dock` | skipped (sandbox denies the read) | `HotCornerPolicy.systemAction` |
 | Data import | — | About › Import from Super Paste (direct download) | `DirectEditionImport` (Core), `DirectEditionImporter` (SettingsKit) |
 | MCP stdio bridge | plain executable | own sandbox + network.client + embedded Info.plist | `build-app.sh` `product_flags` |
@@ -20,9 +20,11 @@ No Xcode project, no new targets, no new dependencies.
 
 User-initiated, non-destructive. About › Import… → confirmation → `NSOpenPanel` pre-pointed at
 `~/Library/Application Support/Super Paste` (the panel is what grants the sandbox read access) → `clips.sqlite`,
-`-wal`, `-shm` and `Blobs/` are **copied** into `<container>/Application Support/Super Paste Import/` with a
-completion marker → the user quits and reopens → before the store opens, the current Store history moves to
-`Backup/Before import <date>/` and the staged copy moves in. The direct edition's files are only read. MCP clients
+`-wal`, `-shm` and `Blobs/` are **copied** (a history containing symbolic links is refused) into
+`<container>/Application Support/Super Paste Import/` with a completion marker → the user quits and reopens →
+before the store opens, the current Store history, its `Sync/` state and `File Access.plist` move to
+`Backup/Before import <date>/` and the staged copy moves in. The swap is renames with `.applying`/`.moved-out`
+markers, so a relaunch finishes an interrupted one; sync starts over with the imported history. The direct edition's files are only read. MCP clients
 and sync state are not imported; preferences are not imported (each edition keeps its own). If the direct edition is
 running it warns first. Covered by `Core.directEditionImport` (fixture layout); the panel step needs a human run.
 
@@ -37,6 +39,6 @@ bind and says so in Integrations — change one port.
 ## Deviations from the shared brief
 
 - Brief addendum §1 says NSEvent global monitors don't work sandboxed. The hot corner uses a global mouse-moved
-  monitor, and in the ad-hoc sandboxed build the peek appeared when the pointer reached the corner (test-results §6),
-  so it is kept. Re-verify on a distribution-signed build.
+  monitor and is kept unchanged; the only observation that it works used a synthetic mouse-move, so it needs a human
+  re-run (test-results §6). If it fails, the fallback is polling `NSEvent.mouseLocation` on a timer.
 - Import requires a quit and reopen (the open SQLite store can't be swapped live); the app offers Quit Now.

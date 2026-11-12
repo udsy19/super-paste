@@ -10,9 +10,15 @@ container came from them; results below only count items whose ids/contents were
 | Command | Result |
 |---|---|
 | `swift build && .build/debug/SuperPasteSelfTest` | warning-free, `All self-tests passed.` (incl. UpdateKit tests) |
-| `swift build -Xswiftc -DAPP_STORE --scratch-path .build-appstore && .build-appstore/debug/SuperPasteSelfTest` | warning-free, `All self-tests passed.` (UpdateKit tests compiled out; adds `Core.directEditionImport`, `SyncKit.folderBookmark`) |
+| `swift build -Xswiftc -DAPP_STORE --scratch-path .build-appstore && .build-appstore/debug/SuperPasteSelfTest` | warning-free, `All self-tests passed.` (UpdateKit tests compiled out; adds `Core.directEditionImport`, `ClipboardKit.fileBookmarks`, `SyncKit.folderBookmark`) |
 
-`ClipStore.performance` (a timing check) failed once on a loaded machine (0.188 s vs its bound) and passed on rerun.
+Store-only checks: import (copy, staged swap, backup, sync-state reset, resumed interrupted swap, symlink refusal),
+file bookmarks (LRU of 64 held paths, pruning to existing items, persisted book), sync folder bookmark (resolves,
+moved folder followed, missing bookmark reported as "Choose it again"). `ClipStore.performance` (a timing check)
+failed once on a loaded machine and passed on rerun.
+
+**Rule for the rest of this file:** results obtained with synthetic keyboard/mouse input or AX presses (§10) are not
+counted as verified; those items are listed as NEEDS HUMAN RE-RUN.
 
 ## 2. Bundle checks
 
@@ -22,12 +28,14 @@ container came from them; results below only count items whose ids/contents were
 - `Info.plist`: `CFBundleIdentifier = com.udsy.superpaste.appstore`; no `NSAppleEventsUsageDescription`.
 - `nm SuperPaste | grep -i 'updatekit\|Updater'` → only `StripKit.CardView.updateRing` (a false match): no updater code is linked.
 
-## 3. Clipboard capture, privacy filters, history, link previews (sandboxed) — PASS
+## 3. Clipboard capture, concealed-type filter, history, link previews (sandboxed) — PASS (CLI only)
 
 - `pbcopy` of `sandbox-probe-<ts>` → row in the container's `clips.sqlite` (kind text, app `com.apple.Terminal`,
   app colour computed): pasteboard polling and frontmost-app lookup work sandboxed.
 - A pasteboard item carrying `org.nspasteboard.ConcealedType` → not saved.
 - A `public.file-url` → saved as a files item.
+- Ignored-apps exclusion was **not** exercised sandboxed (only the concealed type was); it uses the same frontmost
+  app lookup that §3 shows working. NEEDS HUMAN RE-RUN: copy in an ignored app (e.g. Passwords), check nothing is saved.
 - `https://example.com/` → link item with `link_title = Example Domain` (network.client works).
 
 ## 4. MCP server and the sandboxed stdio bridge — PASS (after a fix)
@@ -42,33 +50,37 @@ container came from them; results below only count items whose ids/contents were
   `list_pinboards` → `{"pinboards":[]}`. The bridge got its own container (`com.udsy.superpaste.appstore.mcp`).
   The test client was seeded by writing a token hash into the container's `MCP/clients.json`.
 
-## 5. Copied files across a relaunch — FAILED, fixed, PASS
+## 5. Copied files across a relaunch — defect found and fixed; in-app retest NEEDS HUMAN RE-RUN
 
 - Finding: after a relaunch, choosing a files item put only Super Paste's two marker types on the pasteboard; the
   `public.file-url` was gone. Experiment: a sandboxed tool writing a `public.file-url` it cannot read → dropped; the
   same tool unsandboxed → kept. Reading the URL from the pasteboard makes it readable for that launch only; a
   security-scoped bookmark made then, resolved in a fresh process with access held during the write → kept
   (released immediately after `writeObjects` → dropped).
-- Fix: `SandboxFileAccess`. Retest: file `zebrafile.txt` copied, app quit and reopened, item chosen in the strip →
+- Fix: `SandboxFileAccess`. The finding and the fix's mechanism were shown with standalone sandboxed CLI tools (no
+  input automation). The in-app retest below chose the item with synthetic keystrokes, so it does not count: file
+  `zebrafile.txt` copied, app quit and reopened, item chosen in the strip →
   pasteboard had `public.file-url`, `public.utf8-plain-text`, `org.superpaste.item-id 8F392854…` (the item's id),
   `org.nspasteboard.source com.udsy.superpaste.appstore`.
 - Items captured before this fix (or imported from the direct edition) have no bookmark and still paste without the
   file (known-blockers).
 
-## 6. Global shortcut, strip, hot corner — PASS (synthetic input, see §10)
+## 6. Global shortcut, strip, copy-to-clipboard, hot corner — NEEDS HUMAN RE-RUN
 
-- ⇧⌘V (Carbon `RegisterEventHotKey`) opened the strip (a 1512×332 window owned by the app's pid).
-- Return in the strip with the Store default (To clipboard) wrote the item to the pasteboard with the markers.
-- Mouse moved to the bottom-left corner → the 220×70 peek window appeared: `NSEvent` global mouse monitor works sandboxed.
+These were observed only with synthetic input (System Events keystrokes and a posted mouse-move, §10): ⇧⌘V showed
+the strip window, Return wrote the item with its markers, the corner showed the peek. Not counted as verified.
+Re-run by hand: ⇧⌘V opens the strip; Return puts the item on the clipboard (Store default); moving the pointer into
+the bottom-left corner shows the peek; check `/usr/bin/log show` (§9) for denials.
 
-## 7. Direct paste permission — request path PASS; granted path NEEDS HUMAN RUN
+## 7. Direct paste permission — NEEDS HUMAN RE-RUN
 
 - `superpaste://enable-direct-paste` showed the "Paste to Any App" screen, i.e. `CGPreflightPostEventAccess()` = false.
-- Its Open System Settings button called `CGRequestPostEventAccess()`: the system TCC database then held
-  `kTCCServicePostEvent|com.udsy.superpaste.appstore|0`.
+- Its Open System Settings button (pressed by an AX click, §10 — so not counted) called `CGRequestPostEventAccess()`:
+  the system TCC database then held `kTCCServicePostEvent|com.udsy.superpaste.appstore|0` (since reset with
+  `tccutil reset PostEvent com.udsy.superpaste.appstore`).
 - Not done: granting it and pasting into another app (no synthetic ⌘V was posted by me).
 
-## 8. Sync folder bookmark — logic PASS; sandboxed picker NEEDS HUMAN RUN
+## 8. Sync folder bookmark — logic PASS (self-test); sandboxed picker NEEDS HUMAN RUN
 
 - `SyncKit.folderBookmark` (Store self-test, unsandboxed process): enabling sync stores a security-scoped bookmark
   that resolves to the folder, and `key.check` is written through it.
@@ -98,7 +110,7 @@ buttons (~18:09–18:10); a click on Settings › Sync › Folder sync (~18:10:5
 the open panel — they are the "syncfolder path" that reached the orchestrator's session; it was not from the user.
 No ⌘V was ever posted. After the stop order: no synthetic input of any kind.
 
-## Needs a human run (exact steps)
+## Needs a human run (exact steps; no automation)
 
 1. `ADHOC=1 scripts/package-appstore.sh && open "build/appstore/Super Paste.app"`.
 2. Settings › Sync › Folder sync → pick an empty folder → status reaches "Synced"; folder has `key.check` and a
@@ -109,4 +121,6 @@ No ⌘V was ever posted. After the stop order: no synthetic input of any kind.
 4. About › Import… → pick `~/Library/Application Support/Super Paste` → Quit Now → reopen: the direct edition's
    history and pinboards appear; `Backup/Before import …` holds the previous Store history; the direct folder is unchanged.
 5. Settings › Integrations › Add Client… → paste the snippet into Claude Desktop → its tools list Super Paste.
-6. Check sandbox denials with the §9 command.
+6. §6: ⇧⌘V, Return, hot corner. §3: copy in an ignored app (Passwords) — not saved.
+7. §5: copy a file in Finder, quit and reopen, choose it in the strip, paste in Finder — the file is pasted.
+8. Check sandbox denials with the §9 command.

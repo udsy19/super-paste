@@ -3,7 +3,8 @@
 **Status: CODE COMPLETE / CREDENTIALS REQUIRED** (branch `release/macos-app-store`). The sandboxed Store build
 compiles, passes the self-tests and was exercised as an ad-hoc-signed sandboxed app on macOS 26.5.1. It has never
 been signed with a distribution identity, validated or uploaded: this Mac has no Apple certificates or profiles.
-Several granted-permission and picker paths still need a human run (see `test-results.md`).
+The strip, shortcuts, hot corner, pickers and granted-permission paths still need a human run; observations made
+earlier with synthetic input are not counted (see `test-results.md`).
 
 One codebase, two editions:
 
