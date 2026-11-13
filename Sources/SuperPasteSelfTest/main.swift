@@ -22,7 +22,9 @@ registerStripKitTests()
 registerSettingsKitTests()
 registerSyncKitTests()
 registerMCPKitTests()
+#if !APP_STORE
 registerUpdateKitTests()
+#endif
 registerEndToEndTests()
 
 for (name, run) in SelfTest.cases {

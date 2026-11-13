@@ -183,6 +183,19 @@ public enum Permissions {
         case pasteboard = "Privacy_Pasteboard"
     }
 
+    #if APP_STORE
+    // The Mac App Store edition asks only for what direct paste uses, posting the ⌘V keystroke: the post-event
+    // access check (listed under Accessibility in System Settings), never AX trust, which a sandboxed app can't use
+    // to inspect other apps anyway.
+
+    /// Whether Super Paste may post keyboard events (direct paste).
+    public static var isAccessibilityTrusted: Bool { CGPreflightPostEventAccess() }
+
+    /// Shows the system prompt for posting events when not yet allowed; returns the current access.
+    @discardableResult public static func requestAccessibility() -> Bool {
+        CGRequestPostEventAccess()
+    }
+    #else
     /// Whether Super Paste may post keyboard events (direct paste).
     public static var isAccessibilityTrusted: Bool { AXIsProcessTrusted() }
 
@@ -190,6 +203,7 @@ public enum Permissions {
     @discardableResult public static func requestAccessibility() -> Bool {
         AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
+    #endif
 
     @MainActor public static func open(_ pane: Pane) {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane.rawValue)") {

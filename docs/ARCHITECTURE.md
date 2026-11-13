@@ -180,3 +180,6 @@ swift run SuperPasteSelfTest      # all checks
 scripts/signing-setup.sh          # once: project-local signing identity in .signing/
 scripts/build-app.sh              # build/Super Paste.app, signed
 ```
+
+The Mac App Store edition (`APP_STORE`, sandboxed, no UpdateKit) is built with `DISTRIBUTION=appstore
+scripts/build-app.sh` or `scripts/package-appstore.sh`; see `docs/app-store/README.md`.

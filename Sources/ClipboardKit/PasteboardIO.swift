@@ -42,7 +42,10 @@ package enum PasteboardIO {
     }
 
     package static func pasteboardItems(for entries: [EntryData]) -> [NSPasteboardItem] {
-        entries.map { entry in
+        // The sandbox (Store edition) drops file URLs the app can't reach: resume access to copied files first.
+        _ = SandboxFileAccess.urls(entries.flatMap(\.reps).filter { $0.type == TextTypes.fileURL }
+            .compactMap { URL(dataRepresentation: $0.data, relativeTo: nil)?.path })
+        return entries.map { entry in
             let item = NSPasteboardItem()
             for rep in entry.reps { item.setData(rep.data, forType: .init(rep.type)) }
             return item

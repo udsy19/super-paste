@@ -47,6 +47,19 @@ public enum SuperPastePaths {
     /// A damaged database is moved here before starting over.
     public static var backup: URL { ensure(support.appendingPathComponent("Backup", isDirectory: true)) }
 
+    /// The user's real home folder. Inside the App Sandbox `homeDirectoryForCurrentUser` is the app's container, so
+    /// paths outside it (iCloud Drive, the direct edition's data) are built from the password database instead.
+    public static var userHome: URL {
+        guard let dir = getpwuid(getuid())?.pointee.pw_dir else { return FileManager.default.homeDirectoryForCurrentUser }
+        return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
+    }
+
+    /// Where the direct-download edition (not sandboxed) keeps its files; the Store edition offers to import them.
+    public static var directEditionSupport: URL {
+        userHome.appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent(supportFolderName, isDirectory: true)
+    }
+
     @discardableResult public static func ensure(_ url: URL) -> URL {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url

@@ -157,7 +157,7 @@ extension StripController {
     static func openURLs(_ item: ClipItem) -> [URL] {
         switch item.kind {
         case .link: ItemPresentation.linkURL(item).map { [$0] } ?? []
-        case .files: item.filePaths.map { URL(fileURLWithPath: $0) }
+        case .files: SandboxFileAccess.urls(item.filePaths)
         default: []
         }
     }
@@ -171,7 +171,7 @@ extension StripController {
     }
 
     func revealInFinder(_ item: ClipItem) {
-        let urls = item.filePaths.map { URL(fileURLWithPath: $0) }
+        let urls = SandboxFileAccess.urls(item.filePaths)
         guard !urls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
         hide()

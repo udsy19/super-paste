@@ -1,0 +1,129 @@
+{
+  "app": "Super Paste",
+  "repo": "udsy19/super-paste",
+  "branch": "release/macos-app-store",
+  "commit": "65f04e4",
+  "bundleIds": {
+    "direct": "com.udsy.superpaste",
+    "appstore": "com.udsy.superpaste.appstore"
+  },
+  "features": [
+    {
+      "name": "Clipboard monitoring",
+      "classification": "compatible",
+      "storeStatus": "verified sandboxed",
+      "evidence": "test-results §3"
+    },
+    {
+      "name": "Privacy exclusions (concealed types, ignored apps)",
+      "classification": "compatible",
+      "storeStatus": "concealed type verified sandboxed (CLI); ignored-apps exclusion needs human re-run",
+      "evidence": "test-results §3"
+    },
+    {
+      "name": "History, search, pinboards, Paste Stack",
+      "classification": "compatible",
+      "storeStatus": "verified sandboxed (store + MCP search/create)",
+      "evidence": "test-results §3-4, self-tests"
+    },
+    {
+      "name": "Global shortcuts (Carbon RegisterEventHotKey)",
+      "classification": "unverified-needs-experiment",
+      "storeStatus": "needs human re-run (earlier observation used synthetic input)",
+      "evidence": "test-results §6, §10"
+    },
+    {
+      "name": "Hot corner peek (NSEvent global mouse monitor)",
+      "classification": "unverified-needs-experiment",
+      "storeStatus": "needs human re-run (earlier observation used a posted mouse-move); Dock conflict check disabled",
+      "evidence": "test-results §6, §9, §10"
+    },
+    {
+      "name": "Copy to clipboard",
+      "classification": "compatible",
+      "storeStatus": "needs human re-run (earlier observation used synthetic Return); Store default",
+      "evidence": "test-results §6"
+    },
+    {
+      "name": "Direct paste (CGEvent Cmd-V)",
+      "classification": "compatible-with-config",
+      "storeStatus": "needs human re-run (request was triggered by an AX click); review risk 2.4.5; off by default",
+      "evidence": "test-results §7"
+    },
+    {
+      "name": "Copied files paste/open/preview across relaunch",
+      "classification": "compatible-after-architecture-change",
+      "storeStatus": "defect and fix mechanism shown with sandboxed CLI tools; LRU/pruning self-tested; in-app retest needs human re-run",
+      "evidence": "test-results §5, ClipboardKit.fileBookmarks"
+    },
+    {
+      "name": "Link previews",
+      "classification": "compatible-with-config",
+      "storeStatus": "verified sandboxed",
+      "evidence": "test-results §3"
+    },
+    {
+      "name": "Encrypted folder sync",
+      "classification": "compatible-after-architecture-change",
+      "storeStatus": "bookmark logic self-tested (incl. moved folder, missing bookmark); sandboxed picker+relaunch needs human run",
+      "evidence": "test-results §8, SyncKit.folderBookmark"
+    },
+    {
+      "name": "Local MCP HTTP server",
+      "classification": "compatible-with-config",
+      "storeStatus": "verified sandboxed on 127.0.0.1:39725",
+      "evidence": "test-results §4"
+    },
+    {
+      "name": "MCP stdio bridge",
+      "classification": "compatible-after-architecture-change",
+      "storeStatus": "verified sandboxed after embedding Info.plist; App Store validation unverified",
+      "evidence": "test-results §4"
+    },
+    {
+      "name": "Open at login (SMAppService)",
+      "classification": "unverified-needs-experiment",
+      "storeStatus": "not exercised",
+      "evidence": "—"
+    },
+    {
+      "name": "Import from direct edition",
+      "classification": "compatible",
+      "storeStatus": "logic self-tested (copy, recoverable swap, sync reset, symlink refusal); panel needs human run",
+      "evidence": "Core.directEditionImport"
+    },
+    {
+      "name": "Self-updater (GitHub Releases)",
+      "classification": "incompatible-confirmed",
+      "storeStatus": "compiled out of Store build",
+      "evidence": "test-results §2"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "Apple SDK frameworks (AppKit, SwiftUI, Network, CryptoKit, LinkPresentation, WebKit, …)",
+      "version": "macOS SDK 26.5",
+      "license": "Apple SDK",
+      "kind": "system framework",
+      "bundled": false,
+      "sandboxOK": true
+    },
+    {
+      "name": "SQLite (libsqlite3)",
+      "version": "system",
+      "license": "Public domain",
+      "kind": "system library",
+      "bundled": false,
+      "sandboxOK": true
+    },
+    {
+      "name": "super-paste-mcp",
+      "version": "1.0.3",
+      "license": "MIT",
+      "kind": "first-party helper executable",
+      "bundled": true,
+      "sandboxOK": true
+    }
+  ],
+  "status": "CODE COMPLETE / CREDENTIALS REQUIRED"
+}

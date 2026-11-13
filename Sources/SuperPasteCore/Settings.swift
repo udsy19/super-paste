@@ -50,9 +50,15 @@ public enum HotCornerPolicy {
     }
 
     /// macOS's Hot Corner setting for a corner, from the Dock's preferences (nil when unset).
+    /// The Mac App Store edition can't read the Dock's preferences from its sandbox (`user-preference-read
+    /// com.apple.dock` is denied), so it never sees a conflict and keeps the user's choice.
     public static func systemAction(for corner: HotCorner) -> Int? {
+        #if APP_STORE
+        return nil
+        #else
         guard let key = corner.dockDefaultsKey, let dock = UserDefaults(suiteName: "com.apple.dock") else { return nil }
         return dock.object(forKey: key) as? Int
+        #endif
     }
 }
 
@@ -93,8 +99,13 @@ public extension Defaults.Keys {
     static let openAtLogin = Key<Bool>("openAtLogin", default: false)
     static let isStatusItemEnabled = Key<Bool>("isStatusItemEnabled", default: true)
     static let isSoundEffectsEnabled = Key<Bool>("isSoundEffectsEnabled", default: true)
-    /// Paste Items: true = To active app (paste directly), false = To clipboard.
+    /// Paste Items: true = To active app (paste directly), false = To clipboard. The Mac App Store edition starts on
+    /// To clipboard, which needs no permission; direct paste is one switch away (Settings › General).
+    #if APP_STORE
+    static let isDirectPasteEnabled = Key<Bool>("isDirectPasteEnabled", default: false)
+    #else
     static let isDirectPasteEnabled = Key<Bool>("isDirectPasteEnabled", default: true)
+    #endif
     static let isPasteAsPlainTextEnabled = Key<Bool>("isPasteAsPlainTextEnabled", default: false)
     /// Keep History in days; 0 = Forever (`HistoryRetention`). Forever by default: what you copied stays until you
     /// delete it. (1.0.1 defaulted to 30 days; `HistoryRetention.migrateLegacyDefault()` moves untouched installs on.)
@@ -150,6 +161,9 @@ public extension Defaults.Keys {
     static let isSyncEnabled = Key<Bool>("isSyncEnabled", default: false)
     /// The shared folder (iCloud Drive, Dropbox, a NAS…) as a POSIX path; "" until chosen.
     static let syncFolderPath = Key<String>("syncFolderPath", default: "")
+    /// Mac App Store edition: a security-scoped bookmark of the sync folder, so the sandbox lets it back in after
+    /// a relaunch. Empty in the direct edition.
+    static let syncFolderBookmark = Key<Data>("syncFolderBookmark", default: Data())
     /// Last successful sync, seconds since 1970 (0 = never).
     static let lastSyncDate = Key<Double>("lastSyncDate", default: 0)
 
@@ -158,12 +172,14 @@ public extension Defaults.Keys {
     static let isMCPEnabled = Key<Bool>("isMCPEnabled", default: false)
     static let mcpPort = Key<Int>("mcpPort", default: 39725)
 
-    // MARK: Updates
+    // MARK: Updates (direct edition only; the Mac App Store edition is updated by the App Store)
 
+    #if !APP_STORE
     /// Checks GitHub Releases in the background and installs newer versions (UpdateKit).
     static let installUpdates = Key<Bool>("installUpdates", default: true)
     /// When UpdateKit last reached GitHub Releases, in seconds since 1970 (0 = never).
     static let lastUpdateCheck = Key<Double>("lastUpdateCheck", default: 0)
+    #endif
 
     // MARK: App state
 

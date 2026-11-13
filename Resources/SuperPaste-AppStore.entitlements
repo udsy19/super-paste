@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Mac App Store edition. See docs/app-store/entitlements.md for why each key is here. -->
+	<key>com.apple.security.app-sandbox</key><true/>
+	<!-- Link previews (LinkPresentation) of links the user copies; switchable off in Settings. -->
+	<key>com.apple.security.network.client</key><true/>
+	<!-- The local MCP server: listens on 127.0.0.1 only, off by default. -->
+	<key>com.apple.security.network.server</key><true/>
+	<!-- The sync folder, the sync key export/import, apps picked for Ignore, the direct-edition import. -->
+	<key>com.apple.security.files.user-selected.read-write</key><true/>
+	<!-- Security-scoped bookmark that lets the sync folder back in after a relaunch. -->
+	<key>com.apple.security.files.bookmarks.app-scope</key><true/>
+</dict>
+</plist>

@@ -1,3 +1,4 @@
+#if !APP_STORE  // the Mac App Store edition updates through the App Store; none of this is compiled into it
 import AppKit
 import Combine
 import SuperPasteCore
@@ -189,3 +190,4 @@ final class Updater: Updating {
         DispatchQueue.main.async { HUD.show("Updated to \(version)") }
     }
 }
+#endif

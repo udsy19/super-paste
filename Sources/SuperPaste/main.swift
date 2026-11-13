@@ -6,7 +6,9 @@ import StripKit
 import SettingsKit
 import SyncKit
 import MCPKit
-import UpdateKit
+#if !APP_STORE
+import UpdateKit  // the Mac App Store edition is updated by the App Store: no updater is linked in
+#endif
 
 /// The app shell (behaviour.md §1): an agent app (`LSUIElement`) with a menu bar item, global shortcuts and the
 /// `superpaste://` URL scheme. Everything else lives in the feature modules, reached through `Services`.
@@ -27,11 +29,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Before the store's first prune: an install still on the old 30-day default keeps everything from now on.
         if HistoryRetention.migrateLegacyDefault() { Log.app.info("Keep History moved from the old 30-day default to Forever") }
+        #if APP_STORE
+        // A history imported from the direct-download edition goes in before the store opens it.
+        do {
+            if try DirectEditionImport.applyStaged() { Log.app.notice("Imported the direct edition's history") }
+        } catch {
+            Log.app.error("Importing the direct edition's history failed: \(error.localizedDescription, privacy: .public)")
+        }
+        #endif
         ClipStoreModule.install()
         ClipboardKitModule.install()
         SyncKitModule.install()
         MCPKitModule.install()
+        #if !APP_STORE
         UpdateKitModule.install()
+        #endif
         SettingsKitModule.install()
         StripKitModule.install()
         NSApp.mainMenu = MainMenu.make()
@@ -47,7 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Services.clipboard.start()
         if Defaults[.isMCPEnabled] { Services.mcp.start() }
         if !Services.onboarding.isCompleted { Services.onboarding.show() }
+        #if !APP_STORE
         Services.updates.start()
+        #endif
         StripKitModule.startHotCorner()
         // A store that was damaged or couldn't be opened is never a silent fresh start (behaviour.md §1.9).
         if let recovery = ClipStoreModule.recovery {
