@@ -107,3 +107,14 @@ Run `curl -fsSL https://udsy19.github.io/super-paste/install.sh | bash -s -- --u
 `~/Library/Application Support/Super Paste` and `~/Library/Preferences/com.udsy.superpaste.plist`. If you used sync,
 also delete the Super Paste data in your sync folder. The sync key stays in the macOS Keychain so that turning sync
 back on keeps working; to remove it too, delete the `com.udsy.superpaste` item in Keychain Access.
+
+## Mac App Store edition
+
+Super Paste from the Mac App Store (`com.udsy.superpaste.appstore`) follows everything above, with these differences:
+
+- **Data collected by the developer: none.** No analytics, no accounts, no servers. Nothing you copy is sent to the developer.
+- **No updates check.** The App Store edition has no built-in updater and never contacts `api.github.com`; the App Store updates it.
+- **Network use** is limited to: link previews of links you copy (on by default, **Settings → Privacy**), folder sync to a folder you pick (off by default; encrypted on your Mac with AES-GCM before it is written), and the MCP server, which listens on `127.0.0.1` only (off by default).
+- **Pasting is copy-only by default.** Typing ⌘V into the front app is opt-in (**Settings → General**) and needs the macOS Accessibility (post events) permission, which is requested only when you turn it on.
+- **Where data lives:** inside the app's sandbox container, `~/Library/Containers/com.udsy.superpaste.appstore/`. The App Store edition can copy your history from the direct download only when you choose **Import**; it never moves or deletes the original.
+- **Removing everything:** delete the app, then the container folder above.
